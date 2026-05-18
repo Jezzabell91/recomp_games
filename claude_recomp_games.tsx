@@ -343,13 +343,13 @@ export default function RecompGames() {
               <p style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", margin: "0 0 20px", lineHeight: 1.6 }}>
                 Most people will be close on weekly points. The monthly challenges, body comp points, and Bonus Stars create the real separation. Stars are revealed at the very end, just like Mario Party.
               </p>
-              <PointsBar label="Weekly Check-Ins" max={130} total={472} color="#4FC3F7" icon="✅" />
-              <PointsBar label="Monthly Challenges" max={120} total={472} color="#66BB6A" icon={FLEXED} />
-              <PointsBar label="Bonus Stars" max={100} total={472} color="#FFD700" icon={STAR} />
-              <PointsBar label="Push-Up Challenge" max={57} total={472} color="#FF7043" icon={FIRE} />
-              <PointsBar label="Points Steals" max={30} total={472} color="#EF5350" icon={LIGHTNING} />
-              <PointsBar label="Body Comp Points" max={22} total={472} color="#26C6DA" icon="🔬" />
-              <PointsBar label="Midpoint Photos" max={15} total={472} color="#AB47BC" icon={CAMERA} />
+              <PointsBar label="Weekly Check-Ins" max={130} total={520} color="#4FC3F7" icon="✅" />
+              <PointsBar label="Monthly Challenges" max={100} total={520} color="#66BB6A" icon={FLEXED} />
+              <PointsBar label="Bonus Stars" max={100} total={520} color="#FFD700" icon={STAR} />
+              <PointsBar label="Body Comp Points" max={88} total={520} color="#26C6DA" icon="🔬" />
+              <PointsBar label="Push-Up Challenge" max={57} total={520} color="#FF7043" icon={FIRE} />
+              <PointsBar label="Points Steals" max={30} total={520} color="#EF5350" icon={LIGHTNING} />
+              <PointsBar label="Midpoint Photos" max={15} total={520} color="#AB47BC" icon={CAMERA} />
             </Card>
           </RevealSection>
         </section>
@@ -486,7 +486,7 @@ export default function RecompGames() {
               <div style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: 15, color: "#A5E0A8", marginBottom: 10, textAlign: "center" }}>Podium Points</div>
               <Podium />
               <div style={{ textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 4 }}>
-                Everyone who completes a challenge earns <strong style={{ color: "#A5E0A8" }}>+5 participation points</strong>
+                Everyone else who at least attempted earns <strong style={{ color: "#A5E0A8" }}>+5 participation points</strong>
               </div>
             </Card>
           </RevealSection>
@@ -541,7 +541,7 @@ export default function RecompGames() {
                 }}>
                   <div style={{ fontSize: 24, marginBottom: 6 }}>🔥</div>
                   <div style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 700, fontSize: 18, color: "#FFB088", textShadow: "0 0 8px rgba(255,112,67,0.5)" }}>+1 pt</div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 4 }}>per 500g fat lost</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 4 }}>per 125g fat lost</div>
                 </div>
                 <div style={{
                   flex: 1, padding: "16px 14px", borderRadius: 14,
@@ -550,7 +550,7 @@ export default function RecompGames() {
                 }}>
                   <div style={{ fontSize: 24, marginBottom: 6 }}>💪</div>
                   <div style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 700, fontSize: 18, color: "#A5E0A8", textShadow: "0 0 8px rgba(102,187,106,0.5)" }}>+1 pt</div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 4 }}>per 200g muscle gained</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 4 }}>per 50g muscle gained</div>
                 </div>
               </div>
               <div style={{
@@ -559,16 +559,16 @@ export default function RecompGames() {
               }}>
                 <div style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: 14, color: "#7EDDEC", marginBottom: 8 }}>Example</div>
                 <div style={{ fontSize: 14, color: "rgba(255,255,255,0.9)", lineHeight: 1.7 }}>
-                  Lose 3kg of fat = <strong style={{ color: "#FFB088" }}>6 pts</strong><br/>
-                  Gain 2kg of muscle = <strong style={{ color: "#A5E0A8" }}>10 pts</strong><br/>
-                  <span style={{ color: "#7EDDEC", fontFamily: "'Fredoka', sans-serif", fontWeight: 600 }}>Total: 16 body comp points</span>
+                  Lose 3kg of fat = <strong style={{ color: "#FFB088" }}>24 pts</strong><br/>
+                  Gain 2kg of muscle = <strong style={{ color: "#A5E0A8" }}>40 pts</strong><br/>
+                  <span style={{ color: "#7EDDEC", fontFamily: "'Fredoka', sans-serif", fontWeight: 600 }}>Total: 64 body comp points</span>
                 </div>
               </div>
               <div style={{
                 marginTop: 12, fontSize: 13, color: "rgba(255,255,255,0.75)",
                 textAlign: "center", lineHeight: 1.6,
               }}>
-                A strong recomp will earn roughly 15 to 25 points from scans alone. The Bonus Stars then reward the top performers on top of this.
+                A strong recomp will earn roughly 60 to 100 points from scans alone. The Bonus Stars then reward the top performers on top of this.
               </div>
             </Card>
           </RevealSection>
@@ -650,11 +650,11 @@ export default function RecompGames() {
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {[
                 { icon: "✅", when: "Every Monday", what: "Weekly check-in (weight + one sentence)", calc: "5 pts × 26 wks", max: 130 },
-                { icon: FLEXED, when: "Monthly", what: "Fitness challenges (4 total)", calc: "Up to 30 pts × 4", max: 120 },
+                { icon: FLEXED, when: "Monthly", what: "Fitness challenges (4 total)", calc: "25 pts × 4 (1st place)", max: 100 },
                 { icon: STAR, when: "The Finale", what: "Bonus Stars (revealed at the end)", calc: "20 pts × 5 stars", max: 100 },
+                { icon: "🔬", when: "Final scan", what: "Body comp points", calc: "+1 per 125g fat lost, +1 per 50g muscle", max: "~80" },
                 { icon: FIRE, when: "June 3–26", what: "Push-Up Challenge", calc: "33 + daily bonuses", max: 57 },
                 { icon: LIGHTNING, when: "Anytime", what: "Points Steal (3 tokens)", calc: "±10 pts each", max: 30 },
-                { icon: "🔬", when: "Final scan", what: "Body comp points", calc: "+1 per 500g fat lost, +1 per 200g muscle", max: "~20" },
                 { icon: CAMERA, when: "September", what: "Midpoint progress photos", calc: "", max: 15 },
               ].map((r, i) => (
                 <div key={i} style={{
