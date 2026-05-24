@@ -8,10 +8,10 @@
 
 - **Stack:** Vite + React 18, HashRouter, Supabase (Postgres + Auth + Storage in Sydney), deployed to GitHub Pages at `recomp.games`.
 - **Auth:** personal links via URL fragment (`#login=<base64(email:password)>`), session persists in localStorage. Already implemented in `lib/auth.js` + `context/AuthProvider.jsx`.
-- **Participants:** 8 friends in Australia. 2 seeded (Jeremy admin, Andrew). 6 to come.
+- **Participants:** 9 friends in Australia, listed in `participants/participants.csv` (name, email, image path). Jeremy is admin; everyone else equal.
 - **Challenge dates:** 1 June 2026 → 1 December 2026 (26 weeks). Week 1 = Mon 2026-06-01.
 - **Week semantics:** `week_start` is the Monday (Brisbane) the week begins on. All Brisbane time reads go through `Intl.DateTimeFormat({ timeZone: 'Australia/Brisbane' })` — see `lib/dates.js` below. (Brisbane has no DST, so UTC+10 holds year-round, but we never hand-roll the offset.)
-- **Photo privacy:** all 8 participants can view each other's photos. Leaderboard is public; everything else is auth-gated.
+- **Photo privacy:** all 9 participants can view each other's photos. Leaderboard is public; everything else is auth-gated.
 
 ---
 
@@ -485,25 +485,28 @@ Update `main.jsx` to the route map above. Add `components/RequireAuth.jsx` and `
 
 `scripts/seed_users.mjs`:
 
-- Accept a `color` field per user in the `USERS` array.
-- Look for `./avatars/<email-local-part>.jpg` (e.g. `./avatars/jeremy.bell91.jpg`).
-- Upload to the **public `avatars` bucket** at `<user_id>.jpg` (flat layout, one file per user, `upsert: true`).
+- Read `participants/participants.csv` (columns: `name,email,image`) at startup — this is the canonical participant list.
+- Combine each CSV row with a hardcoded `COLOR_BY_NAME` map in the script (the CSV doesn't carry visual styling).
+- `is_admin` is derived from `name === "Jeremy"` (only admin in Phase 1).
+- Upload `<image>` (the CSV value, e.g. `participants/aidan.jpg`) to the **public `avatars` bucket** at `<user_id>.jpg` (flat layout, one file per user, `upsert: true`).
 - Write the bucket's stable public URL into `public.users.avatar_url`:
   `${VITE_SUPABASE_URL}/storage/v1/object/public/avatars/<user_id>.jpg`. Append a cache-buster query (`?v=<timestamp>`) so re-seeded avatars invalidate immediately.
 - Re-running rotates passwords AND replaces avatars (idempotent overwrite). Skip avatar upload if the local file is missing — leave existing `avatar_url` alone.
+- Startup sanity-check: every CSV name must have a matching `COLOR_BY_NAME` entry, else exit before touching the DB.
 
-The 8 participants and their colors (from `design_handoff_recomp_games/README.md`):
+The 9 participants and their colors (mapping defined in `scripts/seed_users.mjs#COLOR_BY_NAME`; identity in `participants/participants.csv`):
 
 | Name | Email | Color | Admin |
 |---|---|---|---|
-| Lachie | TBD | `#4FC3F7` | |
-| Jeremy | jeremy.bell91@gmail.com | `#FFD700` | yes |
-| Brodie | TBD | `#66BB6A` | |
-| Tom | TBD | `#FF7043` | |
-| Mitch | TBD | `#AB47BC` | |
-| Dan | TBD | `#26C6DA` | |
-| Andrew | andrew-bell@hotmail.com | `#EF5350` | |
-| Sam | TBD | `#FFA500` | |
+| Aidan   | aidan@recompgames.com   | `#4FC3F7` (light blue) | |
+| Andrew  | andrew@recompgames.com  | `#EF5350` (red) | |
+| Brenton | brenton@recompgames.com | `#66BB6A` (green) | |
+| Davis   | davis@recompgames.com   | `#FF7043` (orange-red) | |
+| Jason   | jason@recompgames.com   | `#AB47BC` (purple) | |
+| Jeremy  | jeremy@recompgames.com  | `#FFD700` (gold) | yes |
+| Jimmy   | jimmy@recompgames.com   | `#26C6DA` (cyan) | |
+| Joe     | joe@recompgames.com     | `#FFA500` (orange) | |
+| Justin  | justin@recompgames.com  | `#EC407A` (pink — new 9th, design palette only had 8) | |
 
 ---
 
@@ -625,7 +628,7 @@ Sections, top to bottom:
 Queries needed:
 - `select c.*, p.value as awarded_value from check_ins c left join points p on p.user_id = c.user_id and p.week_start = c.week_start and p.category = 'weekly_checkin' where c.user_id = $me order by c.week_start desc limit 5` (drives Past Check-Ins and the "Late" tag derivation)
 - `select count(*) from initial_photos where user_id = $me`
-- `select * from leaderboard limit 3` + the row for me (or fetch all and slice — only 8 rows)
+- `select * from leaderboard limit 3` + the row for me (or fetch all and slice — only 9 rows)
 
 ---
 
@@ -666,7 +669,7 @@ Timeline (Option C from `recomp-feed.jsx`).
 
   Returns at most one row per user. Build a `{ userId: { weight_kg, week_start } }` map and join client-side; missing keys (week-1 newcomers, or anyone whose first check-in was deferred until late in the challenge) render with no change badge — same code path the CheckIn page already uses for its last-week pill.
 - Fetch reactions in bulk: `select check_in_id, user_id, emoji from reactions where check_in_id in (...)`. Aggregate client-side into `{checkInId: {emoji: count}}` and also a `{checkInId: Set<emoji>}` for "did I react with this".
-- **Sign scale-photo URLs in one round trip:** `supabase.storage.from('photos').createSignedUrls(paths, 60 * 60 * 24)` (plural — takes an array, returns an array). Calling the singular `createSignedUrl` per row would be 8 sequential round trips on every Activity render and feel noticeably sluggish on mobile data. The plural form is one round trip. Apply the same rule to Admin's per-week view and any other surface that signs multiple photos at once.
+- **Sign scale-photo URLs in one round trip:** `supabase.storage.from('photos').createSignedUrls(paths, 60 * 60 * 24)` (plural — takes an array, returns an array). Calling the singular `createSignedUrl` per row would be up to 9 sequential round trips on every Activity render and feel noticeably sluggish on mobile data. The plural form is one round trip. Apply the same rule to Admin's per-week view and any other surface that signs multiple photos at once.
 - Group items by **Brisbane calendar date** of `submitted_at` (not rolling 24h windows — a Mon 11pm submission must stay in TODAY's bucket until Brisbane midnight, not roll to YESTERDAY at 1am Tuesday):
   - TODAY: Brisbane Y-M-D equals `todayInBrisbaneYMD()`
   - YESTERDAY: Brisbane Y-M-D equals yesterday's Brisbane date
@@ -679,7 +682,7 @@ Timeline (Option C from `recomp-feed.jsx`).
 ### `pages/MyProfile.jsx`
 
 - Header (no edit pencil): avatar (72px) + name + "Rank #X · Week Y of 26".
-- **Rank computation** (used here and on Participant Profile): the `leaderboard` view returns all 8 rows ordered by `total_points desc`. Compute `rank = rows.findIndex(r => r.user_id === targetUserId) + 1`. No SQL `rank()` window — 8 rows, do it client-side. Cache the result in component state keyed on `userId`. Ties resolve by `weeks_checked_in desc` (already part of the view's ORDER BY); a `dense_rank`-style "shared 3rd" display is overkill for 8 people.
+- **Rank computation** (used here and on Participant Profile): the `leaderboard` view returns all 9 rows ordered by `total_points desc`. Compute `rank = rows.findIndex(r => r.user_id === targetUserId) + 1`. No SQL `rank()` window — 9 rows, do it client-side. Cache the result in component state keyed on `userId`. Ties resolve by `weeks_checked_in desc` (already part of the view's ORDER BY); a `dense_rank`-style "shared 3rd" display is overkill for 9 people.
 - Stats row: Points / Rank / Check-ins. Same component used in Participant Profile.
 - `<WeightSparkline>` from own `check_ins` history.
 - Starting photos thumbnails (3 slots, 3:4 aspect, signed URLs). No retake button.
@@ -779,7 +782,7 @@ Two mitigations, both already covered elsewhere in this plan:
 
    Six months covers school holidays and Christmas; at least one of the 8 will be in a different timezone at some point. Cheaper to set the expectation in advance than to debug "the app says I missed Monday but it's Sunday here."
 
-In 2026 most participants are likely on iOS 17+ where this is fixed and the same Safari session is visible to the PWA, but in an 8-person group one or two on older devices is plausible — and "the app is broken" texts at 7am Monday are exactly what launch day shouldn't have.
+In 2026 most participants are likely on iOS 17+ where this is fixed and the same Safari session is visible to the PWA, but in a 9-person group one or two on older devices is plausible — and "the app is broken" texts at 7am Monday are exactly what launch day shouldn't have.
 
 ### Deploy
 
@@ -811,13 +814,13 @@ jobs:
 
 GitHub repo secrets to set: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. (Service role key is never in the build — only used by `scripts/seed_users.mjs` locally.)
 
-### Seed remaining 6 participants
+### Seed all 9 participants
 
-Once you have names + emails + (optionally) Messenger DP files, append to `USERS` array in `scripts/seed_users.mjs` and re-run. Existing users' passwords rotate (links re-issued); new users get fresh links.
+Run `node scripts/seed_users.mjs`. It reads `participants/participants.csv` for identity, applies the in-script `COLOR_BY_NAME` map, uploads each `participants/<name>.jpg` to the `avatars` bucket, and prints a personal link per user. Re-running rotates passwords (links re-issued) and overwrites avatars. To add or remove participants, edit the CSV (and the colors map if names change).
 
 ### Pre-launch data reset
 
-**Run this on the morning of 31 May 2026, after the final dress rehearsal.** Whatever's in the database at 00:00 Brisbane on 1 June is what 8 people see when they tap in — any stray test rows from Phase 2/3 development will show up on the live leaderboard and Activity feed and erode trust on day 1.
+**Run this on the morning of 31 May 2026, after the final dress rehearsal.** Whatever's in the database at 00:00 Brisbane on 1 June is what 9 people see when they tap in — any stray test rows from Phase 2/3 development will show up on the live leaderboard and Activity feed and erode trust on day 1.
 
 `scripts/reset_challenge_data.mjs`:
 
@@ -863,8 +866,8 @@ Doubles as an RLS sanity check: the script must succeed with the service role, a
 - **Activity feed Options A and B, Leaderboard Podium variant** — reference only; don't build.
 - **Reaction picker beyond 3 fixed emojis** — schema check constraint enforces; no settings.
 - **Admin UIs for the 6 non-weekly scoring categories** — schema accepts them all (migration 0008); UIs ship in later phases. In Phase 1, those points categories simply don't exist in any row yet, so the leaderboard reflects weekly check-ins only. See the Admin "Scaffolded-but-not-built tabs" list for exact scope.
-- **Backfilling check-ins from previous weeks** — once `currentWeekStart()` advances on the next Monday, the previous week's window is closed. There's no UI to insert a `check_ins` row with a stale `week_start`. If you (Jeremy) ever need to backfill (e.g., someone PMs you a Sunday-night photo that didn't get submitted in time), do it via the Supabase SQL editor — it's an 8-person group, not a public app.
-- **Client-side error logging / telemetry** — no Sentry, Logflare, or equivalent in Phase 1. Support model for 8 friends is "ping Jeremy in the group chat if it breaks"; Jeremy reproduces from the description, reads Supabase logs for backend errors, and Chrome DevTools / Safari Web Inspector for client errors via screen-share if needed. Worth revisiting if Phase 2 grows the participant count or the group's tolerance for "weird, refresh and try again" runs out.
+- **Backfilling check-ins from previous weeks** — once `currentWeekStart()` advances on the next Monday, the previous week's window is closed. There's no UI to insert a `check_ins` row with a stale `week_start`. If you (Jeremy) ever need to backfill (e.g., someone PMs you a Sunday-night photo that didn't get submitted in time), do it via the Supabase SQL editor — it's a 9-person group, not a public app.
+- **Client-side error logging / telemetry** — no Sentry, Logflare, or equivalent in Phase 1. Support model for 9 friends is "ping Jeremy in the group chat if it breaks"; Jeremy reproduces from the description, reads Supabase logs for backend errors, and Chrome DevTools / Safari Web Inspector for client errors via screen-share if needed. Worth revisiting if Phase 2 grows the participant count or the group's tolerance for "weird, refresh and try again" runs out.
 
 ---
 
@@ -872,8 +875,8 @@ Doubles as an RLS sanity check: the script must succeed with the service role, a
 
 | # | Item | Blocks |
 |---|---|---|
-| A | The remaining 6 participants' display names + emails | Phase 5 seeding |
-| B | 8 avatar JPEGs in `./avatars/` folder, named `<email-local-part>.jpg` | Phase 0 seed re-run |
+| A | ~~The remaining 6 participants' display names + emails~~ — **resolved** via `participants/participants.csv` (9 participants, all known). | — |
+| B | ~~8 avatar JPEGs in `./avatars/` folder~~ — **resolved**: 9 JPEGs in `./participants/` per CSV `image` column. | — |
 | C | PWA icons: `icon-192.png` and `icon-512.png` with the ★ logo. Can stub with placeholders for now and swap later. | Phase 5 PWA setup |
 | D | Confirm challenge start date is **Monday 2026-06-01** (assumed throughout) | Phase 0 `lib/dates.js` constant |
 
