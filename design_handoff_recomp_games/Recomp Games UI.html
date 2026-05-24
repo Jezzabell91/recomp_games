@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recomp Games — UI Design</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; box-sizing: border-box; }
+    body { background: #18182a; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="recomp-shared.jsx"></script>
+  <script type="text/babel" src="recomp-feed.jsx"></script>
+  <script type="text/babel" src="recomp-screens.jsx"></script>
+
+  <script type="text/babel">
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "accent": "#FFD700",
+      "dark": true
+    }/*EDITMODE-END*/;
+
+    function RecompApp() {
+      const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+      const { accent, dark } = tweaks;
+      const PH = 874;
+      const PW = 402;
+
+      return (
+        <React.Fragment>
+          <DesignCanvas>
+            <DCSection id="home" title="Participant Home">
+              <DCArtboard id="home-main" label="Home — Pending check-in" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <HomeScreen accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="home-checked" label="Home — Checked in (Monday)" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <HomeScreenCheckedIn accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="feed" title="Activity Feed">
+              <DCArtboard id="feed-a" label="Option A — Compact List" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <ActivityFeedA accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="feed-b" label="Option B — Cards" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <ActivityFeedB accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="feed-c" label="Option C — Timeline" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <ActivityFeedC accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="checkin" title="Weekly Check-In Flow">
+              <DCArtboard id="ci-1" label="Step 1 — Scale Photo" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <CheckInStep1 accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="ci-2" label="Step 2 — Weight & Note" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <CheckInStep2 accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="ci-done" label="Confirmation" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <CheckInConfirm accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="photos" title="Initial Photos Flow">
+              <DCArtboard id="ip-front" label="Step 1 — Front" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <InitialPhotosStep accent={accent} dark={dark} pose="front" step={0} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="ip-side" label="Step 2 — Side" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <InitialPhotosStep accent={accent} dark={dark} pose="side" step={1} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="ip-back" label="Step 3 — Back" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <InitialPhotosStep accent={accent} dark={dark} pose="back" step={2} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="ip-done" label="Photos Saved" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <InitialPhotosDone accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="profile" title="Profile">
+              <DCArtboard id="profile-me" label="My Profile" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <MyProfile accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="profile-lachie" label="Viewing — Lachie (#1)" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <ParticipantProfile accent={accent} dark={dark} participantIndex={0} />
+                </IOSDevice>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="lb" title="Public Leaderboard">
+              <DCArtboard id="lb-clean" label="Option A — Clean" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <LeaderboardClean accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+              <DCArtboard id="lb-podium" label="Option B — Podium" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <LeaderboardPodium accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="fallback" title="Not Signed In">
+              <DCArtboard id="no-auth" label="Fallback — No personal link" width={PW} height={PH}>
+                <IOSDevice dark={dark} width={PW} height={PH}>
+                  <NotSignedIn accent={accent} dark={dark} />
+                </IOSDevice>
+              </DCArtboard>
+            </DCSection>
+          </DesignCanvas>
+
+          <TweaksPanel>
+            <TweakSection title="Theme">
+              <TweakColor
+                label="Accent color"
+                value={tweaks.accent}
+                onChange={v => setTweak('accent', v)}
+                options={['#FFD700', '#4FC3F7', '#66BB6A', '#FF7043']}
+              />
+            </TweakSection>
+          </TweaksPanel>
+        </React.Fragment>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<RecompApp />);
+  </script>
+</body>
+</html>
