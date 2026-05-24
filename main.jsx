@@ -16,6 +16,7 @@ import Leaderboard        from './pages/Leaderboard.jsx';
 import MyProfile          from './pages/MyProfile.jsx';
 import ParticipantProfile from './pages/ParticipantProfile.jsx';
 import Admin              from './pages/Admin.jsx';
+import Kit                from './pages/Kit.jsx';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -24,6 +25,9 @@ createRoot(document.getElementById('root')).render(
         <Routes>
           {/* Public landing page — also handles personal-link sign-in via #login= fragment */}
           <Route path="/" element={<RecompGames />} />
+
+          {/* Phase 1 UI-kit preview — temporary, no auth. Remove or keep in Phase 2. */}
+          <Route path="/_kit" element={<Kit />} />
 
           {/* Auth-gated + pre-challenge gated participant routes */}
           <Route path="/app"                element={<RequireChallengeStarted><Home /></RequireChallengeStarted>} />
