@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "./context/AuthProvider";
 
 const STAR = "★";
 const FIRE = "🔥";
@@ -253,6 +255,16 @@ function Podium() {
 
 // ═══════════════ MAIN ═══════════════
 export default function RecompGames() {
+  // Signed-in users land here only when the installed PWA opens to `/` (old
+  // manifest cached on their phone) or when they type `recomp.games` directly.
+  // Bounce them into the app instead of leaving them stranded on the marketing
+  // page with no nav.
+  const { session, loading } = useAuth();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!loading && session) navigate("/app", { replace: true });
+  }, [loading, session, navigate]);
+
   return (
     <div style={{
       minHeight: "100vh",
