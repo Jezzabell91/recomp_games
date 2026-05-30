@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { theme, ACCENT } from '../../lib/theme';
 import Avatar from './Avatar';
 
@@ -34,7 +35,13 @@ export default function AppBar({ userName, avatarSrc, avatarColor = ACCENT }) {
           RECOMP
         </span>
       </div>
-      <Avatar name={userName} src={avatarSrc} color={avatarColor} size={30} />
+      <Link
+        to="/profile"
+        aria-label="My profile"
+        style={{ display: 'inline-flex', textDecoration: 'none' }}
+      >
+        <Avatar name={userName} src={avatarSrc} color={avatarColor} size={30} />
+      </Link>
     </div>
   );
 }
