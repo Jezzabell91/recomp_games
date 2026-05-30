@@ -44,19 +44,31 @@
 
 ---
 
-## In progress
+### Phase 1 — Shared UI kit (complete)
+- [x] `components/ui/` primitives ported from design handoff: Avatar, Button, Card, Banner, StepDots, AppBar, BottomNav, WeightSparkline, Page, ReactionPills, WeightBadge.
 
-Nothing in progress — Phase 0 just shipped, awaiting kickoff of Phase 1.
+### Phase 2 — Core participant flows (complete)
+- [x] `lib/upload.js` (resize + upload helper).
+- [x] `InitialPhotos` (3-step wizard, front/side/back).
+- [x] `CheckIn` (2-step wizard + re-read confirmation reading joined points row).
+- [x] `Home` (full rewrite with 4-mode check-in card).
+- [x] Admin bypass for the pre-challenge gate (commit `3853db5`).
 
-## To do — build phases (target: live by Mon 1 June 2026)
+### Phase 3 — Social (complete)
+- [x] Activity feed (timeline option C, day grouping by Brisbane calendar date).
+- [x] MyProfile + ParticipantProfile (no edit pencil; 26-cell activity grid on profile).
+- [x] Reactions (🔥💪👏, optimistic update, schema-enforced 3-emoji set).
 
-See `PLAN.md` for full per-phase detail. Summary:
+### Phase 4 — Leaderboard + Admin (complete)
+- [x] Leaderboard rewrite (clean option A, per-user color progress bars).
+- [x] Admin weekly-check-in tab calling `admin_set_weekly_points` / `admin_clear_weekly_points` RPCs.
 
-- [ ] **Phase 1 — Shared UI kit:** `components/ui/` primitives (Avatar, Button, Card, Banner, StepDots, AppBar, BottomNav, WeightSparkline, Page, ReactionPills, WeightBadge).
-- [ ] **Phase 2 — Core participant flows:** `lib/upload.js` (resize + upload helper), `InitialPhotos` (3-step wizard), `CheckIn` (2-step wizard + re-read confirmation), `Home` (full rewrite with 4-mode check-in card).
-- [ ] **Phase 3 — Social:** Activity feed (timeline option C), MyProfile + ParticipantProfile, reactions (🔥💪👏).
-- [ ] **Phase 4 — Leaderboard + Admin:** Leaderboard rewrite (clean option A), Admin weekly-check-in tab calling `admin_set_weekly_points` RPC.
-- [ ] **Phase 5 — Ship:** PWA (vite-plugin-pwa, icons), GitHub Actions deploy workflow, `LAUNCH_COMMS.md`, pre-launch data reset script with post-launch date guard, smoke test on real phones.
+### Phase 5 — Ship (in progress — only smoke test left)
+- [x] **GitHub Actions deploy workflow** — `.github/workflows/deploy.yml` deploys `main` → `recomp.games` via official `actions/deploy-pages@v4` flow. Concurrency-guarded, supports `workflow_dispatch`. Site is live.
+- [x] **PWA setup** — `vite-plugin-pwa` configured in `vite.config.js` (autoUpdate SW, manifest with `start_url`/`scope` = `./`, both icons marked `purpose: "any maskable"`). `scripts/gen_icons.mjs` generates the two PNGs (`public/icon-192.png`, `public/icon-512.png`) — gold ★ on `#0b0f1a` inside the 80% maskable safe zone. `index.html` has `apple-touch-icon` + `apple-mobile-web-app-*` meta for iOS install. Build precaches 6 entries (~485 KiB); no runtime caching of Supabase responses.
+- [x] **Pre-launch data reset script** — `scripts/reset_challenge_data.mjs`. Two safety layers: red-error date guard against running on/after `CHALLENGE_START_YMD` (unless `--force-post-launch`), and a `CONFIRM` stdin prompt. Wipes reactions → points → check_ins → final_photos → initial_photos, then recursively cleans `<uid>/{initial,checkin,final}` in the `photos` bucket. Users + the `avatars` bucket are left untouched. Idempotent.
+- [x] **`LAUNCH_COMMS.md`** — timeline, the launch + day-1 messages (with iOS A2HS + re-paste-link + Brisbane TZ blurbs folded in), troubleshooting cheat sheet, mid-challenge admin override notes.
+- [ ] **Smoke test on a real phone** with a real personal link — 10-step checklist in `PLAN.md` lines 845–856. Pre-launch ComingSoon, on-time Monday check-in, late check-in, Activity tagging, Leaderboard, Admin override, iOS A2HS install. Hands-on; can't be automated.
 
 ## Post-launch — Phase 6+ (mid-June onward)
 - [ ] **Push notifications:** Web Push API + Supabase Edge Function + cron (Sunday 14:00 UTC = Monday 00:00 Brisbane).
@@ -68,13 +80,19 @@ See `PLAN.md` for full per-phase detail. Summary:
 
 ## Open questions / known issues
 
-- iOS PWA push needs the app to be installed to home screen (iOS 16.4+). Phase 5 LAUNCH_COMMS.md will cover how-to.
+- iOS PWA push needs the app to be installed to home screen (iOS 16.4+). `LAUNCH_COMMS.md` covers the A2HS how-to + the iOS <17 re-paste-link quirk.
 - Trust model is "anyone who sees the group chat can act as that user." Acceptable for 9 friends; documented for future reference.
 - End date listed as 1 December but 26 weeks from Mon 1 June ends Sun 29 November. Cosmetic only — code uses `CHALLENGE_START_YMD` + `totalWeeks() = 26`. Decide canonical end date when convenient.
 
 ---
 
-## Next user-side actions
+## Next user-side actions (launch playbook)
 
-1. Sign in via the new Jeremy personal link and confirm ComingSoon renders at `/#/app`. `/#/admin` should still work pre-launch (no gate). `/#/leaderboard` public.
-2. Distribute the other 8 personal links to participants when ready (no rush — links don't expire and only become consequential after Phase 1+ ships).
+The full playbook is in `LAUNCH_COMMS.md`. Sequence:
+
+1. **Dress rehearsal** (any time before Sun 31 May): install the app on your phone, run through initial photos + a check-in as yourself, verify Activity / Leaderboard / Admin behave.
+2. **Sun 31 May morning:** `node scripts/reset_challenge_data.mjs` → type `CONFIRM` to wipe rehearsal data. Date guard refuses to run on/after 1 June without `--force-post-launch`.
+3. **Sun 31 May afternoon:** `node scripts/seed_users.mjs` → capture the 9 personal links it prints. Don't commit them. DM each friend their own link.
+4. **Sun 31 May evening:** send the **Launch message** from `LAUNCH_COMMS.md` to the group chat (iOS + Android install steps, Brisbane TZ note, day-1 task list).
+5. **Mon 1 June morning:** send the **Day 1 reminder**. Watch for "the app is broken" messages — `LAUNCH_COMMS.md` has a troubleshooting cheat sheet for the seven most likely causes.
+6. **Real-phone smoke test** (last Phase 5 item) — walk the 10-step checklist in `PLAN.md` lines 845–856 against `recomp.games` on an actual phone before sending the launch message.
