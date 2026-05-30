@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "./context/AuthProvider";
 
 const STAR = "★";
@@ -255,15 +255,7 @@ function Podium() {
 
 // ═══════════════ MAIN ═══════════════
 export default function RecompGames() {
-  // Signed-in users land here only when the installed PWA opens to `/` (old
-  // manifest cached on their phone) or when they type `recomp.games` directly.
-  // Bounce them into the app instead of leaving them stranded on the marketing
-  // page with no nav.
-  const { session, loading } = useAuth();
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (!loading && session) navigate("/app", { replace: true });
-  }, [loading, session, navigate]);
+  const { session, profile } = useAuth();
 
   return (
     <div style={{
@@ -299,6 +291,31 @@ export default function RecompGames() {
       `}</style>
 
       <FloatingStars />
+
+      {/* Sticky bar for already-signed-in visitors. Outer container has
+          overflow:hidden so position:sticky wouldn't work — use fixed. */}
+      {session && (
+        <Link
+          to="/app"
+          style={{
+            position: "fixed",
+            top: 0, left: 0, right: 0, zIndex: 100,
+            padding: "10px 16px",
+            background: "rgba(255, 215, 0, 0.95)",
+            color: "#0d0620",
+            textAlign: "center",
+            fontFamily: "'DM Sans', sans-serif",
+            fontWeight: 600,
+            fontSize: 14,
+            textDecoration: "none",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          {profile?.display_name ? `Welcome back, ${profile.display_name}` : "Welcome back"} — Open the app →
+        </Link>
+      )}
 
       {/* ── HERO ── */}
       <div style={{ position: "relative", zIndex: 1, textAlign: "center", padding: "60px 20px 24px" }}>

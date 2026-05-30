@@ -9,6 +9,7 @@ import {
   totalWeeks,
   CHALLENGE_START_YMD,
 } from '../lib/dates';
+import { sortLeaderboardForViewer } from '../lib/leaderboard';
 
 import Page from '../components/ui/Page';
 import AppBar from '../components/ui/AppBar';
@@ -51,8 +52,17 @@ export default function ParticipantProfile() {
   // Redirect to /profile when someone hits /profile/<their-own-id>.
   if (myUserId && userId === myUserId) return <Navigate to="/profile" replace />;
 
-  const participant = (leaderboard || []).find((r) => r.user_id === userId);
-  const rank = (leaderboard || []).findIndex((r) => r.user_id === userId) + 1;
+  // Sort with the *participant being viewed* as the "viewer" — their rank
+  // reflects what they'd see on their own MyProfile, not what the visitor
+  // would see. (Otherwise visiting your tied rival's profile would show
+  // them ranked below you, which is a confusingly self-flattering reading
+  // of their page.)
+  const sortedLb = useMemo(
+    () => sortLeaderboardForViewer(leaderboard || [], userId),
+    [leaderboard, userId],
+  );
+  const participant = sortedLb.find((r) => r.user_id === userId);
+  const rank = participant?.displayRank ?? 0;
 
   // 26 Mondays from challenge start — used by the activity grid.
   const allWeekStarts = useMemo(() => {

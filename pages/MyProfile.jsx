@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthProvider';
 import { theme, ACCENT } from '../lib/theme';
@@ -7,6 +8,7 @@ import {
   weekNumber,
   totalWeeks,
 } from '../lib/dates';
+import { sortLeaderboardForViewer } from '../lib/leaderboard';
 
 import Page from '../components/ui/Page';
 import AppBar from '../components/ui/AppBar';
@@ -99,8 +101,13 @@ export default function MyProfile() {
   }, [userId]);
 
   // ── Derived stats ─────────────────────────────────
-  const myRow = (leaderboard || []).find((r) => r.user_id === userId);
-  const myRank = (leaderboard || []).findIndex((r) => r.user_id === userId) + 1;
+  // Viewer-first tiebreak so your rank matches what you'd see on /leaderboard.
+  const sortedLb = useMemo(
+    () => sortLeaderboardForViewer(leaderboard || [], userId),
+    [leaderboard, userId],
+  );
+  const myRow = sortedLb.find((r) => r.user_id === userId);
+  const myRank = myRow?.displayRank ?? 0;
 
   // History for sparkline — earliest → latest. `start` is the very first reading
   // (the baseline shown as "Started at …"); `current` is the latest. We cap the
@@ -187,6 +194,20 @@ export default function MyProfile() {
               items={checkIns}
               emptyMessage="No check-ins yet — your first one shows up here."
             />
+          </div>
+
+          <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+            <Link
+              to="/"
+              style={{
+                fontFamily: theme.hd,
+                fontSize: 13,
+                color: theme.textSec,
+                textDecoration: 'none',
+              }}
+            >
+              About the challenge →
+            </Link>
           </div>
         </div>
       )}

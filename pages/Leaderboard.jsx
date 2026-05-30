@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthProvider';
 import { theme, ACCENT } from '../lib/theme';
 import { currentWeekStart, weekNumber, totalWeeks } from '../lib/dates';
+import { sortLeaderboardForViewer } from '../lib/leaderboard';
 
 import Avatar from '../components/ui/Avatar';
 import BottomNav from '../components/ui/BottomNav';
@@ -20,6 +21,13 @@ export default function Leaderboard() {
   const [error, setError] = useState(null);
 
   const wkNum = weekNumber(currentWeekStart());
+
+  // Per-viewer tiebreak: you float to the top of any tie group you're in.
+  // Signed-out viewers fall through to the SQL view's deterministic order.
+  const sortedRows = useMemo(
+    () => (rows ? sortLeaderboardForViewer(rows, myUserId) : null),
+    [rows, myUserId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -73,12 +81,12 @@ export default function Leaderboard() {
             {error}
           </div>
         )}
-        {!rows && !error && (
+        {!sortedRows && !error && (
           <div style={{ color: theme.textSec, padding: '20px 0', textAlign: 'center' }}>
             Loading…
           </div>
         )}
-        {rows && rows.length === 0 && !error && (
+        {sortedRows && sortedRows.length === 0 && !error && (
           <div style={{
             color: theme.textMut, padding: '40px 0', textAlign: 'center',
             fontFamily: theme.bd, fontSize: 14,
@@ -86,9 +94,11 @@ export default function Leaderboard() {
             No participants yet.
           </div>
         )}
-        {rows && rows.length > 0 && rows.map((r, i) => {
+        {sortedRows && sortedRows.length > 0 && sortedRows.map((r, i) => {
           const isYou = !!myUserId && r.user_id === myUserId;
-          const rankColor = i < 3 ? MEDAL[i] : theme.textMut;
+          // Medal colors follow the shared rank, not the array index — so
+          // four people tied at rank 1 all show gold, none show silver.
+          const rankColor = r.displayRank <= 3 ? MEDAL[r.displayRank - 1] : theme.textMut;
           const barColor = isYou ? ACCENT : (r.color || ACCENT);
           const pct = Math.min(100, (r.weeks_checked_in / TOTAL_WEEKS) * 100);
           const interactive = !!session;
@@ -105,7 +115,7 @@ export default function Leaderboard() {
                 padding: '11px 0',
                 background: 'transparent',
                 border: 'none',
-                borderBottom: i < rows.length - 1 ? `1px solid ${theme.sep}` : 'none',
+                borderBottom: i < sortedRows.length - 1 ? `1px solid ${theme.sep}` : 'none',
                 color: 'inherit',
                 cursor: interactive ? 'pointer' : 'default',
                 textAlign: 'left',
@@ -114,7 +124,7 @@ export default function Leaderboard() {
               <span style={{
                 fontFamily: theme.hd, fontWeight: 700, fontSize: 15,
                 color: rankColor, width: 22, textAlign: 'center', flexShrink: 0,
-              }}>{i + 1}</span>
+              }}>{r.displayRank}</span>
               <Avatar
                 name={r.display_name}
                 src={r.avatar_url}
@@ -164,7 +174,7 @@ export default function Leaderboard() {
           );
         })}
 
-        {!session && rows && (
+        {!session && sortedRows && (
           <div style={{ padding: '24px 0 16px', textAlign: 'center' }}>
             <Link to="/" style={{
               fontFamily: theme.hd, fontWeight: 500, fontSize: 13,

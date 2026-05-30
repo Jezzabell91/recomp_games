@@ -10,6 +10,7 @@ import {
   weekRangeLabel,
   totalWeeks,
 } from '../lib/dates';
+import { sortLeaderboardForViewer } from '../lib/leaderboard';
 
 import Page from '../components/ui/Page';
 import AppBar from '../components/ui/AppBar';
@@ -97,9 +98,15 @@ export default function Home() {
   const hasCheckedInThisWeek = !!thisWeekRow;
   const awarded5 = hasCheckedInThisWeek && thisWeekRow.awarded_value != null;
 
-  const top3 = (leaderboard || []).slice(0, 3);
-  const myRow = (leaderboard || []).find((r) => r.user_id === userId);
-  const myRank = (leaderboard || []).findIndex((r) => r.user_id === userId) + 1; // 0 → 0 (unknown)
+  // Sort with viewer-first tiebreak so the top-3 + "you're #X" pill reflect
+  // the best position you could legitimately claim within any tie group.
+  const sortedLb = useMemo(
+    () => sortLeaderboardForViewer(leaderboard || [], userId),
+    [leaderboard, userId],
+  );
+  const top3 = sortedLb.slice(0, 3);
+  const myRow = sortedLb.find((r) => r.user_id === userId);
+  const myRank = myRow?.displayRank ?? 0; // 0 → unknown / pre-data
 
   const loading = checkIns === null || initialCount === null || leaderboard === null;
 
@@ -326,12 +333,16 @@ function MiniLeaderboard({ top3, myRow, myRank }) {
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {top3.map((r, i) => {
-          const medalColor = i === 0 ? theme.medalGold : i === 1 ? theme.medalSilver : theme.medalBronze;
+        {top3.map((r) => {
+          const medalColor =
+            r.displayRank === 1 ? theme.medalGold
+            : r.displayRank === 2 ? theme.medalSilver
+            : r.displayRank === 3 ? theme.medalBronze
+            : theme.textMut;
           return (
             <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 2px' }}>
               <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 14, color: medalColor, width: 18, textAlign: 'center' }}>
-                {i + 1}
+                {r.displayRank}
               </span>
               <Avatar name={r.display_name} src={r.avatar_url} color={r.color || ACCENT} size={28} />
               <span style={{ flex: 1, fontFamily: theme.hd, fontWeight: 500, fontSize: 14 }}>
