@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { theme } from '../../lib/theme';
 
 const POSES = ['front', 'side', 'back'];
@@ -7,14 +7,50 @@ const POSES = ['front', 'side', 'back'];
 // (`front` / `side` / `back`) mapping to a signed URL. Missing keys render as
 // camera-icon placeholders so the row layout stays stable while photos are
 // still pending upload.
-export default function StartingPhotosRow({ photos = {}, title = 'Starting Photos' }) {
+export default function StartingPhotosRow({
+  photos = {},
+  title = 'Starting Photos',
+  collapsible = false,
+  defaultOpen = false,
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const isOpen = collapsible ? open : true;
   return (
     <div>
       <div style={{ marginBottom: 10 }}>
-        <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 17 }}>
-          {title}
-        </span>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={isOpen}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'transparent', border: 'none', padding: 0,
+              color: 'inherit', cursor: 'pointer', font: 'inherit',
+            }}
+          >
+            <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 17 }}>
+              {title}
+            </span>
+            <span
+              aria-hidden="true"
+              style={{
+                fontFamily: theme.hd, fontSize: 12, color: theme.textSec,
+                transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: 'transform 120ms ease',
+                display: 'inline-block', lineHeight: 1,
+              }}
+            >
+              ›
+            </span>
+          </button>
+        ) : (
+          <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 17 }}>
+            {title}
+          </span>
+        )}
       </div>
+      {isOpen && (
       <div style={{ display: 'flex', gap: 10 }}>
         {POSES.map((pose) => {
           const url = photos[pose];
@@ -51,6 +87,7 @@ export default function StartingPhotosRow({ photos = {}, title = 'Starting Photo
           );
         })}
       </div>
+      )}
     </div>
   );
 }

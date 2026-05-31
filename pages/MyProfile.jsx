@@ -181,7 +181,7 @@ export default function MyProfile() {
             />
           )}
 
-          <StartingPhotosRow photos={photos} />
+          <StartingPhotosRow photos={photos} collapsible />
 
           <div>
             <div style={{
