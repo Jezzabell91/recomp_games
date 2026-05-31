@@ -510,15 +510,18 @@ function StatusBadge({ status }) {
   );
 }
 
-// Status = single source of truth from points_row presence + submitted_at metadata.
-// On-time / late mirrors the trigger's decision (points row presence); the
-// human-readable suffix is for display only.
+// Status reflects the trigger's tiered award: 5 = on-time green, 1–4 =
+// partial-credit late, 0 or no row = no-credit late. The human-readable
+// suffix is for display only.
 function computeStatus(check_in, points_row, weekStart) {
   if (!check_in) return { kind: 'none', label: 'No check-in' };
-  if (points_row) {
+  if (points_row && points_row.value === 5) {
     return { kind: 'on_time', label: `Submitted ${brisbaneStamp(check_in.submitted_at)} ✓` };
   }
   const days = daysBetween(weekStart, check_in.submitted_at);
+  if (points_row && points_row.value > 0) {
+    return { kind: 'late', label: `Late · ${days}d · +${points_row.value} pts` };
+  }
   return { kind: 'late', label: `Late · ${days}d` };
 }
 

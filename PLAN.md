@@ -20,8 +20,8 @@
 | # | Decision | Implication |
 |---|----------|-------------|
 | 1 | Reactions ship in Phase 1 | New `reactions` table; fixed 3-emoji picker (no free emoji selection) |
-| 2 | Check-in window is **Mon 00:00 → Sun 23:59 Brisbane** for the week starting that Monday. Only **Monday** submissions award the 5 points (with a 30-minute internal grace through Tue 00:30 Brisbane — see decision #3); submissions after that are accepted, recorded, and surfaced as "Late · 0 pts" everywhere they appear | One unique `check_ins` row per (user, week_start). The on-time flag is *derived*, not stored — the trigger is the single source of truth: `late = (no weekly_checkin points row exists for this check-in)`. Every UI surface that shows a "Late" tag must left-join `points` (category = 'weekly_checkin') rather than computing from `submitted_at` directly, so the 30-min grace can never disagree with what the leaderboard shows. Once next Monday rolls over and `currentWeekStart()` advances, the previous week's window is closed (the client always inserts with `week_start = currentWeekStart()`, so there's no way to backfill from the UI). **Diverges from handoff README key decision #6** (which hides the card Tue–Sun); we keep accepting Tue–Sun submissions so a missed Monday doesn't break a participant's weight history. |
-| 3 | **Only on-time Monday check-ins auto-award 5 points** — late check-ins create the `check_ins` row but no `points` row. The Postgres trigger compares `NEW.submitted_at` (cast to Brisbane wall-clock) against `week_start + 1 day + 30 minutes`; if earlier, it inserts the 5. The 30-min grace is **internal** — users see "closes 11:59 PM Monday" everywhere — and exists purely so a Mon 23:59:55 submission that commits at Tue 00:00:02 (network + DB write latency) doesn't silently lose points. | Late check-ins are still valuable: they appear in Activity, populate Past Check-Ins, and keep the weight history continuous. They just don't score. `check_ins.note` gets a `length(trim(note)) > 0` check constraint so a blank note can never satisfy any check-in, on-time or late. The CheckIn page's "Late — won't score" banner is derived from `!isMondayInBrisbane()` and *also* shows during the 00:00–00:30 Tue grace window — so a user submitting then sees a late banner but actually gets the 5 points. Deliberate: the grace is for clock-skew commits, not for users gaming a 30-min window post-midnight, and the confirmation screen reads the truth from the points row. Add a one-line code comment in `CheckIn.jsx` so future-you doesn't "fix" the inconsistency. |
+| 2 | Check-in window is **Mon 00:00 → Sun 23:59 Brisbane** for the week starting that Monday. Submissions are **tiered by Brisbane day-of-submit**: Mon 5, Tue 4, Wed 3, Thu 2, Fri 1, Sat/Sun 0 — see decision #3. Sat/Sun submissions are still accepted and recorded, just score zero | One unique `check_ins` row per (user, week_start). The awarded value is the trigger's word — the UI must left-join `points` (category = 'weekly_checkin') and read the row's `value` rather than recomputing from `submitted_at` directly, so the 30-min grace can never disagree with what the leaderboard shows. A `value === 5` row is full credit; `1 ≤ value ≤ 4` is partial (late but earned something); `value === 0` or no row is zero credit. Once next Monday rolls over and `currentWeekStart()` advances, the previous week's window is closed (the client always inserts with `week_start = currentWeekStart()`, so there's no way to backfill from the UI). **Diverges from handoff README key decision #6** (which hides the card Tue–Sun); we keep accepting Tue–Sun submissions so a missed Monday doesn't break a participant's weight history — and now they still earn partial credit. |
+| 3 | **Weekly check-ins auto-award a tiered amount by Brisbane day-of-submit** — Mon 5, Tue 4, Wed 3, Thu 2, Fri 1, Sat/Sun 0. The Postgres trigger (`award_weekly_checkin_points`, rewritten in migration 0011) compares `NEW.submitted_at` (cast to Brisbane wall-clock) against `week_start + Nd + 30 min` for each tier and picks the highest-paying bucket that fits. A 30-minute grace at every day boundary is **internal** — users see day-of-week as the tier, not "before 00:30" — and exists purely so a Mon 23:59:55 submit that commits at Tue 00:00:02 doesn't silently drop a tier. Sat/Sun award is 0; no points row is inserted in that case. | Late check-ins are still valuable: they appear in Activity, populate Past Check-Ins, keep the weight history continuous, and (Tue–Fri) earn partial credit. `check_ins.note` gets a `length(trim(note)) > 0` check constraint so a blank note can never satisfy any check-in, on-time or late. The CheckIn page's late banner uses `pointsForToday()` to tell the user how many points they can still earn today; the confirmation screen reads the truth from the points row's `value`. Surfaces show `Late · +N pts` for partial credit and `Late · 0 pts` for weekend submits. |
 | 4 | The full scoring rubric (per landing page Quick Reference) has 7 sources: weekly check-in (130), fitness challenges (100), bonus stars (100), body comp (~80), push-up challenge (57), points steals (30), midpoint photos (15) | The `points` table is reshaped now (migration 0008 — `category` column, partial-unique on weekly check-in only) to accept any source without further schema work. Phase 1 only *uses* the weekly check-in category. |
 | 5 | Admin portal is unlisted at `/admin` | No nav link anywhere; only Jeremy types the URL |
 | 6 | Phase 1 Admin UI covers **only the weekly check-in category** — review the auto-awarded 5 per participant per week, override to a different value, or zero it out | Other categories (monthly challenges, body comp, push-up, bonus stars, steals, midpoint photos) get their own Admin sub-pages in later phases — each is a new UI surface against the already-categorised `points` table, not a schema migration. |
@@ -49,7 +49,7 @@ All routes are hash-based (HashRouter). `(auth)` means redirect to `/` if no ses
 |---|---|---|
 | `/` | `claude_recomp_games.tsx` | Existing landing page. Two additions: a "View leaderboard →" link near the bottom, and a "Got a personal link? Paste it here" text input that runs the link through the same `#login=…` parse path as the URL fragment. The paste input exists for iOS-standalone PWA users (see Phase 5 → PWA) whose installed app can't see the Safari session — they need a way to re-auth without an editable URL bar. |
 | `/app` | `pages/Home.jsx` | (auth, pre-challenge gate) Participant dashboard. |
-| `/app/checkin` | `pages/CheckIn.jsx` | (auth, pre-challenge gate) Available Mon–Sun Brisbane. 2-step wizard + confirmation. Shows a "Late — won't count for 5 pts" banner when entered Tue–Sun. Redirects to `/app` only if already checked in for the current week. |
+| `/app/checkin` | `pages/CheckIn.jsx` | (auth, pre-challenge gate) Available Mon–Sun Brisbane. 2-step wizard + confirmation. Shows a "Late check-in · submit today for +N pts" banner Tue–Fri, or a zero-credit banner Sat/Sun. Redirects to `/app` only if already checked in for the current week. |
 | `/app/initial-photos` | `pages/InitialPhotos.jsx` | (auth, pre-challenge gate) 3-step wizard (front/side/back) + done screen. |
 | `/activity` | `pages/Activity.jsx` | (auth, pre-challenge gate) Timeline feed, all participants this week. |
 | `/leaderboard` | `pages/Leaderboard.jsx` | Public (no auth). Pre-challenge: still renders, all zeros. Bottom nav only renders when session is present. |
@@ -336,7 +336,60 @@ grant execute on function public.admin_set_weekly_points(uuid, date, integer, te
 grant execute on function public.admin_clear_weekly_points(uuid, date) to authenticated;
 ```
 
-All seven migrations are idempotent. Run in order via Supabase SQL editor.
+`supabase/migrations/0011_tiered_checkin_points.sql`:
+
+```sql
+-- Tier the weekly_checkin auto-award by submit day (Brisbane):
+--   Mon = 5, Tue = 4, Wed = 3, Thu = 2, Fri = 1, Sat/Sun = 0 (no row).
+-- A 30-minute grace past each midnight credits the prior day, so a
+-- 23:59:55 submit that commits at 00:00:02 doesn't silently drop a tier.
+-- Supersedes the Monday-only logic from 0008. Partial unique on
+-- (user_id, week_start) where category='weekly_checkin' from 0008 still
+-- holds; admin_set_weekly_points overrides remain the escape hatch.
+
+create or replace function public.award_weekly_checkin_points()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  submitted_brisbane timestamp;
+  week_start_ts      timestamp;
+  award              integer;
+begin
+  submitted_brisbane := NEW.submitted_at at time zone 'Australia/Brisbane';
+  week_start_ts      := NEW.week_start::timestamp;
+
+  if    submitted_brisbane < week_start_ts + interval '1 day' + interval '30 minutes' then
+    award := 5;
+  elsif submitted_brisbane < week_start_ts + interval '2 days' + interval '30 minutes' then
+    award := 4;
+  elsif submitted_brisbane < week_start_ts + interval '3 days' + interval '30 minutes' then
+    award := 3;
+  elsif submitted_brisbane < week_start_ts + interval '4 days' + interval '30 minutes' then
+    award := 2;
+  elsif submitted_brisbane < week_start_ts + interval '5 days' + interval '30 minutes' then
+    award := 1;
+  else
+    award := 0;
+  end if;
+
+  if award > 0 then
+    insert into public.points (user_id, week_start, value, category, reason, awarded_by)
+    values (NEW.user_id, NEW.week_start, award, 'weekly_checkin',
+            'Auto-awarded for weekly check-in', null)
+    on conflict (user_id, week_start) where category = 'weekly_checkin' do nothing;
+  end if;
+
+  return NEW;
+end;
+$$;
+```
+
+> Note: migration 0008 above shows the original Monday-only trigger; 0011 supersedes that function body via `create or replace`. The trigger binding (`trg_award_weekly_checkin`) is untouched.
+
+All eight migrations are idempotent. Run in order via Supabase SQL editor.
 
 ### Fonts
 
@@ -574,7 +627,9 @@ Used by both photo flows. Photos hit ~150KB after resize — fast even on 4G.
 - Route `/app/checkin` with `?step=1|2` (default 1).
 - **Guard at mount:** if a `check_ins` row already exists for `(me, currentWeekStart())` → `<Navigate to="/app">` (Home shows the confirmed card). No day-of-week guard — submission is open Mon–Sun for the current `week_start`.
 - **Late banner** (rendered above step 1 and step 2 when `!isMondayInBrisbane()`):
-  - Neutral (not amber, not error) accent strip: "Late check-in · this won't score the 5 points but will still appear in your history and Activity feed."
+  - Neutral (not amber, not error) accent strip. Copy varies by `pointsForToday()`:
+    - Tue–Fri (1–4 pts available): `Late check-in · submit today for +N pts (5 on Mon, 4 Tue, 3 Wed, 2 Thu, 1 Fri).`
+    - Sat/Sun (0 pts available): `Late check-in · this won't score any points but will still appear in your history and Activity feed.`
   - Not blocking; the form works normally.
 - **Step 1 (Scale photo):** capture flow identical to initial photos. Stores file in local state (not uploaded yet) so user can go Back from step 2 without losing it.
 - **Step 2 (Weight + note):**
@@ -587,8 +642,8 @@ Used by both photo flows. Photos hit ~150KB after resize — fast even on 4G.
   0. **Re-read `const weekStart = currentWeekStart()` inside the submit handler — *not* a value captured at component mount.** A user lingering on the form across Sun 23:59 → Mon 00:01 Brisbane would otherwise insert with the *previous* Monday's date, the trigger would no-op the points award (the row lands against last week's window), AND they'd be locked out of *this* Monday's check-in (Home's guard reads the fresh `currentWeekStart()` and shows the pending card on a route they think they just completed). Use `weekStart` in both the upload path and the insert below.
   1. Upload scale photo to `<user_id>/checkin/<weekStart>/scale.jpg`.
   2. Insert into `check_ins` (`user_id`, `week_start = weekStart`, `scale_photo_path`, `weight_kg`, `note`) — capture the returned row's `id`.
-  3. **The `trg_award_weekly_checkin` Postgres trigger fires in the same transaction.** It checks `(submitted_at at time zone 'Australia/Brisbane')::date == week_start` and only inserts the 5-point `weekly_checkin` row on a Monday submission. Late submissions create no points row. The client doesn't need to branch — the trigger handles it.
-  4. **Re-read the row joined to its points row to decide the confirmation variant — do not infer from `isMondayInBrisbane()`.** The trigger is the source of truth; the client must reflect it. Without this round trip, clock skew between phone and Postgres at a late-Monday-night submission can make the UI say "+5 pts" when no points row exists (or vice-versa). Query:
+  3. **The `trg_award_weekly_checkin` Postgres trigger fires in the same transaction.** Migration 0011 tiers the award by Brisbane day-of-submit (Mon 5, Tue 4, Wed 3, Thu 2, Fri 1, Sat/Sun 0; 30-min grace at every day boundary). Sat/Sun submissions create no points row. The client doesn't need to branch — the trigger handles it.
+  4. **Re-read the row joined to its points row to decide the confirmation variant — do not infer from `pointsForToday()`.** The trigger is the source of truth; the client must reflect it. Without this round trip, clock skew between phone and Postgres at a late-night submission can make the UI claim the wrong tier (or none at all). Query:
 
     ```sql
     select c.id, c.week_start, c.weight_kg, c.note, c.scale_photo_path, c.submitted_at,
@@ -605,9 +660,10 @@ Used by both photo flows. Photos hit ~150KB after resize — fast even on 4G.
   - **Upload fails** (network, storage error): show inline error above the Submit button, preserve all form state (photo blob in local state, weight, note), no DB insert attempted, no orphan blob. User can retry without re-capturing.
   - **Insert fails after upload succeeded**: best-effort `supabase.storage.from('photos').remove([path])` to delete the orphan blob, then show inline error and preserve form state. If the cleanup `remove()` itself errors, swallow it — the orphan blob is harmless (next-week's submission overwrites the path via `upsert: true`).
   - **Re-read fails after insert succeeded**: the check-in *was* recorded — don't show an error. Navigate to confirmation with `awarded_value: null` and a small "couldn't fetch points status, refresh Home in a moment" line. Home's own query will resolve it.
-- **Confirmation** (two variants, picked from `awarded_value != null` on the re-read row — *not* from `isMondayInBrisbane()`):
-  - Awarded (points row exists) → 🔥 emoji + "Locked in! +{awarded_value} pts" (accent / green) + summary card with photo thumbnail, weight, note. Using `awarded_value` instead of hard-coding `5` also future-proofs against any later trigger change.
-  - Not awarded (no points row) → ⏰ emoji + "Locked in · late check-in" + small "Didn't score the 5 pts, but your weight + note are saved" line + summary card. Same "Back to Home" CTA.
+- **Confirmation** (three variants, picked from `awarded_value` on the re-read row — *not* from `pointsForToday()`):
+  - Full credit (`awarded_value === 5`) → 🔥 emoji + "Locked in! +5 pts" (accent / green) + summary card with photo thumbnail, weight, note.
+  - Partial credit (`awarded_value` 1–4) → ⏰ emoji + "Locked in! +{awarded_value} pts" + small "Late check-in · partial credit. Earlier in the week = more pts." line + summary card.
+  - No credit (`awarded_value === null`, i.e. Sat/Sun) → ⏰ emoji + "Locked in · late check-in" + small "Didn't score any pts, but your weight + note are saved" line + summary card. Same "Back to Home" CTA.
 
 ### `pages/Home.jsx` (full rewrite)
 
@@ -615,14 +671,16 @@ Sections, top to bottom:
 
 1. `<AppBar>` (★ RECOMP + own avatar).
 2. **Greeting:** "Hey, {display_name} 👋" + "Week X of 26" + progress bar.
-3. **Check-in card** (rendered in one of four modes, picked in this order). "Checked in this week" is derived by joining the check-in row to its `points` row: `awarded5 = hasCheckedInThisWeek && pointsRowExistsForThisWeek`.
-   - `hasCheckedInThisWeek && awarded5` → **green confirmed card** showing this week's weight/note + "+5 pts" pill. Stays for the full week, flips back to pending next Monday.
-   - `hasCheckedInThisWeek && !awarded5` → **neutral confirmed-late card** showing this week's weight/note + small "Late check-in · no points this week" line in `textSec`. Same layout as the green card but accent stripped — communicates "yes, you're done for this week, but it didn't score". No CTA.
+3. **Check-in card** (rendered in one of six modes, picked in this order). `awardedValue` is read from the joined `weekly_checkin` points row (null = no row); `todaysPoints = pointsForToday()`.
+   - `hasCheckedInThisWeek && awardedValue === 5` → **green confirmed card** showing this week's weight/note + "+5 pts" pill. Stays for the full week, flips back to pending next Monday.
+   - `hasCheckedInThisWeek && awardedValue` 1–4 → **partial-credit confirmed card** showing weight/note + "Late · +{awardedValue} pts" pill in `textSec` + "Late check-in · partial credit. Earlier in the week = more pts." footnote.
+   - `hasCheckedInThisWeek && (awardedValue === 0 || awardedValue == null)` → **zero-credit confirmed card**: weight/note + "Late · 0 pts" pill + "Weekend check-in · no points this week" footnote.
    - `!hasCheckedInThisWeek && isMondayInBrisbane()` → **pending Monday card**: ⏳ "Check-in not submitted", subtext "Window closes tonight 23:59 AEST · +5 pts", "Submit Check-In" CTA → `/app/checkin`.
-   - `!hasCheckedInThisWeek && !isMondayInBrisbane()` → **pending late card**: ⏰ "Monday window missed", subtext "You can still submit — counts in your history, no points this week", secondary-styled "Submit Late Check-In" CTA → `/app/checkin`. Distinct from the on-time pending card (no urgency, no "+5 pts" promise) so the user understands what they're getting.
+   - `!hasCheckedInThisWeek && todaysPoints > 0` (Tue–Fri) → **pending partial card**: ⏰ "Monday window missed", subtext "Submit today for +{todaysPoints} pts.", secondary-styled "Submit Late Check-In" CTA → `/app/checkin`.
+   - `!hasCheckedInThisWeek && todaysPoints === 0` (Sat/Sun) → **pending zero card**: ⏰ "Week's window closed", subtext "You can still submit — counts in your history, no points this week", secondary-styled "Submit Late Check-In" CTA → `/app/checkin`.
 4. **Initial photos banner** (conditional): visible only when `count(initial_photos for self) < 3`. Links to `/app/initial-photos`. Clears once all 3 uploaded.
 5. **Mini leaderboard:** top 3 from `leaderboard` view + "You're #X with Y points" accent pill. "See all →" → `/leaderboard`.
-6. **Past Check-Ins:** own `check_ins` (left-joined to the `weekly_checkin` points row) ordered `week_start desc`, latest 5. Each row: week label, weight (accent), note. Append a small "Late" tag (textMut, no accent) when the joined points row is null — same single-source-of-truth derivation Activity and the Home check-in card use, so the 30-min Tue 00:30 trigger grace can't cause UI disagreement. Use the same `<PastCheckInList>` component on My Profile so the tag is consistent everywhere.
+6. **Past Check-Ins:** own `check_ins` (left-joined to the `weekly_checkin` points row) ordered `week_start desc`, latest 5. Each row: week label, weight (accent), note. Append a small `Late · +N pts` tag for partial credit (1–4) and `Late` for zero credit (null or 0) — same single-source-of-truth derivation Activity and the Home check-in card use, so the trigger's per-day grace can't cause UI disagreement. Use the same `<PastCheckInList>` component on My Profile so the tag is consistent everywhere.
 7. `<BottomNav active="home">`.
 
 Queries needed:
@@ -848,12 +906,13 @@ Doubles as an RLS sanity check: the script must succeed with the service role, a
 2. **On Monday 2026-06-01 onward:** Open link → silent sign-in → land on `/app` → normal Home renders, "Week 1 of 26".
 3. Tap "Add your starting photos →" → upload all 3 → banner disappears.
 4. **On a Monday:** check-in card shows pending Monday variant → tap Submit → complete the wizard → confirmation reads "Locked in! +5 pts" → Home shows green confirmed card.
-5. **On any non-Monday with no check-in yet for this week:** check-in card shows the pending late variant with "Submit Late Check-In" CTA → complete the wizard → confirmation reads "Locked in · late check-in" with the "no points this week" line → Home shows the neutral confirmed-late card. Verify in Supabase: a `check_ins` row exists for this week, and `points` has *no* `weekly_checkin` row for it.
-6. Open `/activity` → see own on-time check-in cleanly, late check-in tagged "Late · 0 pts". React with 🔥 on both.
-7. Open `/leaderboard` → on-time participant shows 5 points, late participant shows 0 (auto-awarded by the trigger; no admin action required).
-8. As Jeremy, open `/admin` → on-time rows show the auto-awarded 5, late rows show 0 with a "Late · Nd" status badge → override one late row to 5 (legitimate-reason case) → reload leaderboard → that participant's total reflects the override.
-9. Tap a participant in leaderboard → land on their profile, no back button, activity grid renders.
-10. Install to home screen on iOS → open from icon → shell loads with no network (data queries will show empty states; that's expected).
+5. **On a Tue–Fri with no check-in yet for this week:** check-in card shows the pending-partial variant with "Submit today for +N pts" subtext → complete the wizard → confirmation reads "Locked in! +N pts" with the "partial credit" line → Home shows the partial-credit confirmed card with the `Late · +N pts` chip. Verify in Supabase: `points` has a `weekly_checkin` row whose `value` matches N for the right week.
+6. **On a Sat/Sun with no check-in yet for this week:** check-in card shows the pending-zero variant ("Week's window closed") → complete the wizard → confirmation reads "Locked in · late check-in" with the "didn't score any pts" line → Home shows the zero-credit confirmed card. Verify in Supabase: a `check_ins` row exists, and `points` has *no* `weekly_checkin` row for it.
+7. Open `/activity` → see the on-time check-in cleanly, the Tue–Fri check-in tagged `Late · +N pts`, the weekend check-in tagged `Late · 0 pts`. React with 🔥 on each.
+8. Open `/leaderboard` → totals reflect the tiered auto-awards (5 / N / 0). No admin action required.
+9. As Jeremy, open `/admin` → on-time rows show green "Submitted … ✓" with value 5, partial rows show `Late · Nd · +V pts`, weekend rows show `Late · Nd` with value 0 → override one late row to 5 (legitimate-reason case) → reload leaderboard → that participant's total reflects the override.
+10. Tap a participant in leaderboard → land on their profile, no back button, activity grid renders.
+11. Install to home screen on iOS → open from icon → shell loads with no network (data queries will show empty states; that's expected).
 
 ---
 

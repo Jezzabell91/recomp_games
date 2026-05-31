@@ -6,6 +6,7 @@ import { theme, ACCENT } from '../lib/theme';
 import {
   currentWeekStart,
   isMondayInBrisbane,
+  pointsForToday,
   weekNumber,
   weekRangeLabel,
 } from '../lib/dates';
@@ -43,6 +44,7 @@ export default function CheckIn() {
   // comment on submit() for why this matters at Sun→Mon rollover.
   const weekStartAtMount = useMemo(() => currentWeekStart(), []);
   const lateAtMount = !isMondayInBrisbane();
+  const todaysPoints = useMemo(() => pointsForToday(), []);
 
   // ── Guard at mount: already checked in this week? bounce to /app ──
   useEffect(() => {
@@ -157,9 +159,9 @@ export default function CheckIn() {
     }
 
     // Re-read the row joined to its weekly_checkin points row. The trigger is
-    // the source of truth for whether 5 points were awarded — never infer
-    // from isMondayInBrisbane(), because the 30-min Tue grace lives in the
-    // trigger and the UI must reflect what the trigger actually did.
+    // the source of truth for how many points were awarded — never infer from
+    // the client clock, because the per-day 30-min grace lives in the trigger
+    // and the UI must reflect what the trigger actually did.
     const { data: pointsRow, error: pErr } = await supabase
       .from('points')
       .select('value')
@@ -216,7 +218,7 @@ export default function CheckIn() {
           <StepDots step={stepParam - 1} total={2} />
         </div>
 
-        {lateAtMount && <LateBanner />}
+        {lateAtMount && <LateBanner points={todaysPoints} />}
 
         {error && (
           <div
@@ -503,7 +505,10 @@ function StepWeightNote({ weight, setWeight, note, setNote, lastWeek, submitting
 }
 
 // ── Late banner ─────────────────────────────────────────
-function LateBanner() {
+function LateBanner({ points }) {
+  const message = points > 0
+    ? `Late check-in · submit today for +${points} pts (5 on Mon, 4 Tue, 3 Wed, 2 Thu, 1 Fri).`
+    : "Late check-in · this won't score any points but will still appear in your history and Activity feed.";
   return (
     <div
       style={{
@@ -519,7 +524,7 @@ function LateBanner() {
     >
       <span style={{ fontSize: 18 }}>⏰</span>
       <div style={{ fontFamily: theme.bd, fontSize: 13, color: theme.textSec, lineHeight: 1.45 }}>
-        Late check-in · this won't score the 5 points but will still appear in your history and Activity feed.
+        {message}
       </div>
     </div>
   );
@@ -528,7 +533,8 @@ function LateBanner() {
 // ── Confirmation view (two variants) ──────────────────
 function ConfirmationView({ result, weekStart, onBack }) {
   const { row, awardedValue, scaleUrl, partial } = result;
-  const awarded = awardedValue != null;
+  const awarded = awardedValue != null && awardedValue > 0;
+  const fullCredit = awardedValue === 5;
   const wk = weekNumber(weekStart);
   const rangeStr = weekRangeLabel(weekStart);
 
@@ -543,23 +549,28 @@ function ConfirmationView({ result, weekStart, onBack }) {
           transform: 'translateX(-50%)',
           width: 240,
           height: 240,
-          background: awarded ? `${ACCENT}20` : 'rgba(255,255,255,0.05)',
+          background: fullCredit ? `${ACCENT}20` : 'rgba(255,255,255,0.05)',
           borderRadius: '50%',
           filter: 'blur(40px)',
           zIndex: 0,
         }}
       />
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ fontSize: 60, marginBottom: 10 }}>{awarded ? '🔥' : '⏰'}</div>
+        <div style={{ fontSize: 60, marginBottom: 10 }}>{fullCredit ? '🔥' : awarded ? '⏰' : '⏰'}</div>
         <h1 style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 28, margin: '0 0 6px' }}>
           {awarded ? `Locked in! +${awardedValue} pts` : 'Locked in · late check-in'}
         </h1>
         <div style={{ fontFamily: theme.hd, fontWeight: 500, fontSize: 15, color: ACCENT, marginBottom: 6 }}>
           Week {wk} · {rangeStr}
         </div>
+        {awarded && !fullCredit && !partial && (
+          <div style={{ fontFamily: theme.bd, fontSize: 13, color: theme.textSec, marginBottom: 18, maxWidth: 280, marginLeft: 'auto', marginRight: 'auto' }}>
+            Late check-in · partial credit. Earlier in the week = more pts.
+          </div>
+        )}
         {!awarded && !partial && (
           <div style={{ fontFamily: theme.bd, fontSize: 13, color: theme.textSec, marginBottom: 18, maxWidth: 280, marginLeft: 'auto', marginRight: 'auto' }}>
-            Didn't score the 5 pts, but your weight + note are saved.
+            Didn't score any pts, but your weight + note are saved.
           </div>
         )}
         {partial && (

@@ -31,12 +31,12 @@ Everything you'll send to the group chat around launch (Mon 1 June 2026), plus t
 > **What to do on day 1 (Mon 1 June):**
 >
 > 1. Open the app, take your 3 starting photos (front / side / back). You can do this any time during week 1 — they're private to the group.
-> 2. Do your first weekly check-in: scale photo + weight + a one-liner. Submit before **Mon 11:59pm Brisbane** to bank the +5 points.
+> 2. Do your first weekly check-in: scale photo + weight + a one-liner. Submit before **Mon 11:59pm Brisbane** to bank the full +5 points.
 >
 > A few things to know:
 >
-> - Everything in the app runs on **Brisbane time** — week labels, "is it Monday?" checks, everything. If you're interstate or overseas, that's expected and you don't need to do anything. The check-in window opens at Brisbane Monday midnight regardless of where you are.
-> - Late check-ins (Tue–Sun) are still recorded and show up in your history and the activity feed — they just don't score the 5 points that week.
+> - Everything in the app runs on **Brisbane time** — week labels, day-of-week checks, everything. If you're interstate or overseas, that's expected and you don't need to do anything. The check-in window opens at Brisbane Monday midnight regardless of where you are.
+> - **Check-ins are tiered by day:** Mon = +5, Tue = +4, Wed = +3, Thu = +2, Fri = +1, Sat/Sun = +0. Late submissions still appear in your history and the activity feed — they just earn fewer points the later in the week you submit.
 > - Leaderboard is at **recomp.games/#/leaderboard** if you want to peek without signing in.
 > - If anything looks broken, ping me here.
 
@@ -47,7 +47,7 @@ Everything you'll send to the group chat around launch (Mon 1 June 2026), plus t
 > 📷 **It's Monday — Recomp Games is live.** Two things to do today:
 >
 > 1. Take your starting photos (front / side / back) — open the app, follow the prompts.
-> 2. Submit your first check-in (scale photo + weight + a sentence) before **11:59pm Brisbane** for your first +5 pts.
+> 2. Submit your first check-in (scale photo + weight + a sentence) before **11:59pm Brisbane** for the full +5 pts. (Tue +4, Wed +3, Thu +2, Fri +1, weekend +0 — earlier is better.)
 >
 > If you haven't installed the app to your home screen yet, the message from yesterday has the steps. Good luck team 💪
 
@@ -62,7 +62,7 @@ For when someone says "the app is broken." Most reports are one of these:
 | "I opened it from the home screen and it wants me to sign in again." | iOS <17 PWA storage isolation — the installed app has its own storage, didn't inherit Safari's session. | Tell them to paste the same personal link into the "Got a personal link?" box on the front page. Works once per device, persists after that. |
 | "It says I missed Monday but it's still Sunday here." | They're in a timezone behind Brisbane. | Working as designed — the check-in window opens at Brisbane Monday midnight. Repeat the Brisbane TZ note. |
 | "The Submit button is greyed out." | Either weight is blank or note is blank (the DB rejects empty notes). | Tell them to enter both. |
-| "I checked in but didn't get the 5 points." | Either submitted after Mon 11:59pm Brisbane (legitimately late, no points by design) OR genuinely a bug — check `points` table in Supabase joined to their `check_ins` row. | If they have a Mon submission and no `weekly_checkin` points row, open `/admin` and override the value to 5. |
+| "I got fewer points than I expected." | Tiered award: Mon 5, Tue 4, Wed 3, Thu 2, Fri 1, Sat/Sun 0 — based on Brisbane day-of-submit. Or genuinely a bug — check `points` table in Supabase joined to their `check_ins` row. | If the value doesn't match the day they submitted (per Brisbane wall-clock), open `/admin` and override. |
 | "My starting photos banner won't go away." | They've uploaded fewer than 3 starting photos. | Tell them to finish the front/side/back wizard. |
 | "I can't see other people's photos." | They're signed out. | Sign in via personal link. |
 | Anything else | Reproduce from their description. Backend logs in Supabase → Logs. Client logs via screen-share if it's a participant who's comfortable with that. | Fix in code, redeploy via push to main, message them when it's live. |

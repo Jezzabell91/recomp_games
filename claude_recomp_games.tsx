@@ -406,10 +406,10 @@ export default function RecompGames() {
             <Card accent="#4FC3F7">
               <h2 style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 700, fontSize: 22, margin: "0 0 4px", color: "#4FC3F7" }}>✅ Weekly Check-In</h2>
               <div style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: 13, color: "#82D9FF", marginBottom: 12 }}>
-                5 points per week · All or nothing · 26 weeks = 130 pts max
+                Mon 5 · Tue 4 · Wed 3 · Thu 2 · Fri 1 · Sat/Sun 0 · 26 weeks = 130 pts max
               </div>
               <p style={{ fontSize: 14, color: "rgba(255,255,255,0.9)", lineHeight: 1.7, margin: "0 0 16px" }}>
-                Submit any time on Monday in the group chat. Takes 60 seconds.
+                Submit any day Mon–Fri. The earlier in the week, the more points. Takes 60 seconds.
               </p>
               <div style={{
                 display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
@@ -678,7 +678,7 @@ export default function RecompGames() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {[
-                { icon: "✅", when: "Every Monday", what: "Weekly check-in (weight + one sentence)", calc: "5 pts × 26 wks", max: 130 },
+                { icon: "✅", when: "Mon–Fri (tiered)", what: "Weekly check-in (weight + one sentence)", calc: "5/4/3/2/1 pts × 26 wks", max: 130 },
                 { icon: FLEXED, when: "Monthly", what: "Fitness challenges (4 total)", calc: "25 pts × 4 (1st place)", max: 100 },
                 { icon: STAR, when: "The Finale", what: "Bonus Stars (revealed at the end)", calc: "20 pts × 5 stars", max: 100 },
                 { icon: "🔬", when: "Final scan", what: "Body comp points", calc: "+1 per 125g fat lost, +1 per 50g muscle", max: "~80" },

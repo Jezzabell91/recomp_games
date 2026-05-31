@@ -11,6 +11,7 @@
 import {
   currentWeekStart,
   isMondayInBrisbane,
+  pointsForToday,
   todayInBrisbaneYMD,
   isBeforeChallengeStart,
   weekNumber,
@@ -64,6 +65,15 @@ console.log('\nToday-ish 2026-05-24 12:00 Brisbane (pre-challenge)');
 eq('currentWeekStart',      currentWeekStart(today),       '2026-05-18');
 eq('isBeforeChallengeStart', isBeforeChallengeStart(today), true);
 eq('weekNumber(pre-launch is clamped to 1)', weekNumber('2026-05-18'), 1);
+
+console.log('\npointsForToday (Brisbane day-of-week tiers)');
+eq('Mon → 5', pointsForToday(new Date('2026-06-01T12:00:00+10:00')), 5);
+eq('Tue → 4', pointsForToday(new Date('2026-06-02T12:00:00+10:00')), 4);
+eq('Wed → 3', pointsForToday(new Date('2026-06-03T12:00:00+10:00')), 3);
+eq('Thu → 2', pointsForToday(new Date('2026-06-04T12:00:00+10:00')), 2);
+eq('Fri → 1', pointsForToday(new Date('2026-06-05T12:00:00+10:00')), 1);
+eq('Sat → 0', pointsForToday(new Date('2026-06-06T12:00:00+10:00')), 0);
+eq('Sun → 0', pointsForToday(new Date('2026-06-07T12:00:00+10:00')), 0);
 
 console.log('\nweekRangeLabel');
 eq("'2026-06-01' → '1–7 Jun'",      weekRangeLabel('2026-06-01'),  '1–7 Jun');

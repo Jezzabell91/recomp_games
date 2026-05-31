@@ -3,9 +3,10 @@ import { theme } from '../lib/theme';
 import { weekNumber, weekRangeLabel } from '../lib/dates';
 
 // items: [{ week_start, weight_kg, note, awarded_value (nullable) }]
-// "Late" is derived from awarded_value === null — same single-source-of-truth
-// derivation Activity uses, so the trigger's 30-min Tue grace can never make
-// surfaces disagree.
+// "Late" is derived from awarded_value < 5 — same single-source-of-truth
+// derivation Activity uses, so the trigger's per-day grace can never make
+// surfaces disagree. awarded_value: 5 = on-time, 1–4 = partial (late tag
+// shows +N pts), 0 or null = no credit.
 export default function PastCheckInList({ items, emptyMessage = 'No check-ins yet' }) {
   if (!items || items.length === 0) {
     return (
@@ -17,7 +18,11 @@ export default function PastCheckInList({ items, emptyMessage = 'No check-ins ye
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {items.map((it, i) => {
-        const late = it.awarded_value == null;
+        const partial = it.awarded_value != null && it.awarded_value > 0 && it.awarded_value < 5;
+        const noCredit = it.awarded_value == null || it.awarded_value === 0;
+        const lateLabel = partial ? `Late · +${it.awarded_value} pts`
+                         : noCredit ? 'Late'
+                         : null;
         return (
           <div
             key={it.week_start}
@@ -31,7 +36,7 @@ export default function PastCheckInList({ items, emptyMessage = 'No check-ins ye
                 Week {weekNumber(it.week_start)} · {weekRangeLabel(it.week_start)}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {late && (
+                {lateLabel && (
                   <span
                     style={{
                       fontFamily: theme.hd,
@@ -42,7 +47,7 @@ export default function PastCheckInList({ items, emptyMessage = 'No check-ins ye
                       letterSpacing: 1,
                     }}
                   >
-                    Late
+                    {lateLabel}
                   </span>
                 )}
                 <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 16, color: theme.accent }}>

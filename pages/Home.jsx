@@ -6,6 +6,7 @@ import { theme, ACCENT } from '../lib/theme';
 import {
   currentWeekStart,
   isMondayInBrisbane,
+  pointsForToday,
   weekNumber,
   weekRangeLabel,
   totalWeeks,
@@ -29,6 +30,7 @@ export default function Home() {
 
   const weekStart = useMemo(() => currentWeekStart(), []);
   const isMonday = useMemo(() => isMondayInBrisbane(), []);
+  const todaysPoints = useMemo(() => pointsForToday(), []);
   const wkNum = weekNumber(weekStart);
   const totalWk = totalWeeks();
 
@@ -96,7 +98,6 @@ export default function Home() {
   // ── Derived state ───────────────────────────────
   const thisWeekRow = checkIns?.find((r) => r.week_start === weekStart);
   const hasCheckedInThisWeek = !!thisWeekRow;
-  const awarded5 = hasCheckedInThisWeek && thisWeekRow.awarded_value != null;
 
   // Sort with viewer-first tiebreak so the top-3 + "you're #X" pill reflect
   // the best position you could legitimately claim within any tie group.
@@ -126,10 +127,10 @@ export default function Home() {
           <>
             <CheckInCard
               hasCheckedIn={hasCheckedInThisWeek}
-              awarded5={awarded5}
               thisWeekRow={thisWeekRow}
               priorRow={checkIns.find((r) => r.week_start !== weekStart) || null}
               isMonday={isMonday}
+              todaysPoints={todaysPoints}
               weekStart={weekStart}
               onSubmit={() => navigate('/app/checkin')}
             />
@@ -186,37 +187,54 @@ function Greeting({ name, weekNum, totalWk }) {
 }
 
 // ── Check-in card (4 modes) ───────────────────────
-function CheckInCard({ hasCheckedIn, awarded5, thisWeekRow, priorRow, isMonday, weekStart, onSubmit }) {
+function CheckInCard({ hasCheckedIn, thisWeekRow, priorRow, isMonday, todaysPoints, weekStart, onSubmit }) {
   const wk = weekNumber(weekStart);
   const range = weekRangeLabel(weekStart);
+  const awardedValue = hasCheckedIn ? thisWeekRow.awarded_value : null;
+  const fullCredit = awardedValue === 5;
+  const partialCredit = awardedValue != null && awardedValue > 0 && awardedValue < 5;
 
-  // Mode 1: green confirmed card
-  if (hasCheckedIn && awarded5) {
+  // Mode 1: green confirmed card (full 5 pts)
+  if (hasCheckedIn && fullCredit) {
     const delta = priorRow ? Number((Number(thisWeekRow.weight_kg) - Number(priorRow.weight_kg)).toFixed(1)) : null;
     return (
       <Card accent={theme.positive} glow>
-        <ConfirmedHeader weekNum={wk} range={range} pointsLabel={`+${thisWeekRow.awarded_value} pts`} color={theme.positive} />
+        <ConfirmedHeader weekNum={wk} range={range} pointsLabel={`+${awardedValue} pts`} color={theme.positive} />
         <ConfirmedSummary row={thisWeekRow} delta={delta} />
         <NextOpensFootnote />
       </Card>
     );
   }
 
-  // Mode 2: neutral confirmed-late card
-  if (hasCheckedIn && !awarded5) {
+  // Mode 2: partial-credit confirmed card (1–4 pts)
+  if (hasCheckedIn && partialCredit) {
+    const delta = priorRow ? Number((Number(thisWeekRow.weight_kg) - Number(priorRow.weight_kg)).toFixed(1)) : null;
+    return (
+      <Card>
+        <ConfirmedHeader weekNum={wk} range={range} pointsLabel={`Late · +${awardedValue} pts`} color={theme.textSec} />
+        <ConfirmedSummary row={thisWeekRow} delta={delta} />
+        <div style={{ marginTop: 10, fontFamily: theme.bd, fontSize: 12, color: theme.textMut }}>
+          Late check-in · partial credit. Earlier in the week = more pts.
+        </div>
+      </Card>
+    );
+  }
+
+  // Mode 3: zero-credit confirmed card (Sat/Sun submit, or admin set 0)
+  if (hasCheckedIn) {
     const delta = priorRow ? Number((Number(thisWeekRow.weight_kg) - Number(priorRow.weight_kg)).toFixed(1)) : null;
     return (
       <Card>
         <ConfirmedHeader weekNum={wk} range={range} pointsLabel="Late · 0 pts" color={theme.textSec} />
         <ConfirmedSummary row={thisWeekRow} delta={delta} />
         <div style={{ marginTop: 10, fontFamily: theme.bd, fontSize: 12, color: theme.textMut }}>
-          Late check-in · no points this week.
+          Weekend check-in · no points this week.
         </div>
       </Card>
     );
   }
 
-  // Mode 3: pending Monday
+  // Mode 4: pending Monday (full 5 pts available)
   if (!hasCheckedIn && isMonday) {
     return (
       <Card accent={ACCENT} glow>
@@ -232,12 +250,28 @@ function CheckInCard({ hasCheckedIn, awarded5, thisWeekRow, priorRow, isMonday, 
     );
   }
 
-  // Mode 4: pending late
+  // Mode 5: pending late, partial credit still available (Tue–Fri)
+  if (!hasCheckedIn && todaysPoints > 0) {
+    return (
+      <Card>
+        <PendingHeader icon="⏰" weekNum={wk} range={range} color={theme.textSec} />
+        <div style={{ fontFamily: theme.hd, fontWeight: 600, fontSize: 15, color: theme.text, marginTop: 4 }}>
+          Monday window missed
+        </div>
+        <div style={{ fontFamily: theme.bd, fontSize: 12, color: theme.textSec, marginTop: 4, marginBottom: 14 }}>
+          Submit today for +{todaysPoints} pts.
+        </div>
+        <Button variant="secondary" full onClick={onSubmit}>Submit Late Check-In</Button>
+      </Card>
+    );
+  }
+
+  // Mode 6: pending late, no points available (Sat/Sun)
   return (
     <Card>
       <PendingHeader icon="⏰" weekNum={wk} range={range} color={theme.textSec} />
       <div style={{ fontFamily: theme.hd, fontWeight: 600, fontSize: 15, color: theme.text, marginTop: 4 }}>
-        Monday window missed
+        Week's window closed
       </div>
       <div style={{ fontFamily: theme.bd, fontSize: 12, color: theme.textSec, marginTop: 4, marginBottom: 14 }}>
         You can still submit — counts in your history, no points this week.

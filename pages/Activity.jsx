@@ -270,7 +270,12 @@ export default function Activity() {
 }
 
 function FeedItem({ item, isLastInGroup, isMe, photoUrl, reactions, myReactions, onAvatarClick, onToggleReaction }) {
-  const late = item.awarded_value == null;
+  // awarded_value: 5 = on-time, 1–4 = partial credit, 0 or null = no points (Sat/Sun or admin override).
+  const partial = item.awarded_value != null && item.awarded_value > 0 && item.awarded_value < 5;
+  const noCredit = item.awarded_value == null || item.awarded_value === 0;
+  const lateLabel = partial ? `Late · +${item.awarded_value} pts`
+                   : noCredit ? 'Late · 0 pts'
+                   : null;
   const time = relativeTimeLabel(item.submitted_at);
 
   return (
@@ -308,14 +313,14 @@ function FeedItem({ item, isLastInGroup, isMe, photoUrl, reactions, myReactions,
           <span style={{ fontSize: 11, color: theme.textMut, fontFamily: theme.hd, fontWeight: 500 }}>
             {time}
           </span>
-          {late && (
+          {lateLabel && (
             <span style={{
               fontFamily: theme.hd, fontWeight: 500, fontSize: 10,
               color: theme.textMut, textTransform: 'uppercase', letterSpacing: 1,
               padding: '1px 6px', borderRadius: 6,
               border: `1px solid ${theme.border}`, background: theme.surfaceBright,
             }}>
-              Late · 0 pts
+              {lateLabel}
             </span>
           )}
         </div>

@@ -155,7 +155,7 @@ export default function Kit() {
             Add your starting photos →
           </Banner>
           <Banner accent={theme.textSec} icon="⏰">
-            Late check-in · this won't score the 5 points
+            Late check-in · submit today for +3 pts
           </Banner>
         </Section>
 
