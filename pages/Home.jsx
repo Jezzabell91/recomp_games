@@ -42,18 +42,21 @@ export default function Home() {
     if (!userId) return;
     let cancelled = false;
     (async () => {
-      // 1. Past check-ins (last 5) left-joined to points via PostgREST embed.
-      // The !left tells Supabase to LEFT JOIN points, and we filter the join
-      // to category='weekly_checkin' (and same week_start) inline.
+      // Past check-ins (last 5) + weekly_checkin points rows fetched separately
+      // and merged on week_start. We can't use a PostgREST embed because
+      // check_ins and points share no direct FK — both reference users.id.
       const ciPromise = supabase
         .from('check_ins')
-        .select(`
-          week_start, weight_kg, note,
-          points!left(value, week_start, category)
-        `)
+        .select('week_start, weight_kg, note')
         .eq('user_id', userId)
         .order('week_start', { ascending: false })
         .limit(5);
+
+      const ptsPromise = supabase
+        .from('points')
+        .select('week_start, value')
+        .eq('user_id', userId)
+        .eq('category', 'weekly_checkin');
 
       const ipPromise = supabase
         .from('initial_photos')
@@ -62,23 +65,18 @@ export default function Home() {
 
       const lbPromise = supabase.from('leaderboard').select('*');
 
-      const [ciRes, ipRes, lbRes] = await Promise.all([ciPromise, ipPromise, lbPromise]);
+      const [ciRes, ptsRes, ipRes, lbRes] = await Promise.all([ciPromise, ptsPromise, ipPromise, lbPromise]);
       if (cancelled) return;
 
       if (!ciRes.error && ciRes.data) {
-        // Embedded points rows aren't filtered by the join's WHERE — they're
-        // a child array. Pick the matching weekly_checkin row for THIS week_start.
-        const normalised = ciRes.data.map((row) => {
-          const matching = (row.points || []).find(
-            (p) => p.category === 'weekly_checkin' && p.week_start === row.week_start,
-          );
-          return {
-            week_start: row.week_start,
-            weight_kg: row.weight_kg,
-            note: row.note,
-            awarded_value: matching ? matching.value : null,
-          };
-        });
+        const valueByWeek = {};
+        for (const p of ptsRes.data || []) valueByWeek[p.week_start] = p.value;
+        const normalised = ciRes.data.map((row) => ({
+          week_start: row.week_start,
+          weight_kg: row.weight_kg,
+          note: row.note,
+          awarded_value: valueByWeek[row.week_start] ?? null,
+        }));
         setCheckIns(normalised);
       } else {
         setCheckIns([]);

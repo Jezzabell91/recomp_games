@@ -34,14 +34,19 @@ export default function MyProfile() {
     let cancelled = false;
 
     (async () => {
+      // check_ins and points have no direct FK to each other, so we fetch
+      // each table separately and merge on week_start client-side.
       const ciPromise = supabase
         .from('check_ins')
-        .select(`
-          week_start, weight_kg, note,
-          points!left(value, week_start, category)
-        `)
+        .select('week_start, weight_kg, note')
         .eq('user_id', userId)
         .order('week_start', { ascending: false });
+
+      const ptsPromise = supabase
+        .from('points')
+        .select('week_start, value')
+        .eq('user_id', userId)
+        .eq('category', 'weekly_checkin');
 
       const ipPromise = supabase
         .from('initial_photos')
@@ -50,23 +55,18 @@ export default function MyProfile() {
 
       const lbPromise = supabase.from('leaderboard').select('*');
 
-      const [ciRes, ipRes, lbRes] = await Promise.all([ciPromise, ipPromise, lbPromise]);
+      const [ciRes, ptsRes, ipRes, lbRes] = await Promise.all([ciPromise, ptsPromise, ipPromise, lbPromise]);
       if (cancelled) return;
 
-      // Check-ins normalised the same way Home / Activity do — pick the matching
-      // weekly_checkin row from the embedded points array.
       if (!ciRes.error && ciRes.data) {
-        setCheckIns(ciRes.data.map((row) => {
-          const matching = (row.points || []).find(
-            (p) => p.category === 'weekly_checkin' && p.week_start === row.week_start,
-          );
-          return {
-            week_start:    row.week_start,
-            weight_kg:     Number(row.weight_kg),
-            note:          row.note,
-            awarded_value: matching ? matching.value : null,
-          };
-        }));
+        const valueByWeek = {};
+        for (const p of ptsRes.data || []) valueByWeek[p.week_start] = p.value;
+        setCheckIns(ciRes.data.map((row) => ({
+          week_start:    row.week_start,
+          weight_kg:     Number(row.weight_kg),
+          note:          row.note,
+          awarded_value: valueByWeek[row.week_start] ?? null,
+        })));
       } else {
         setCheckIns([]);
       }

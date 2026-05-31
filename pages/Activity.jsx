@@ -37,19 +37,27 @@ export default function Activity() {
     let cancelled = false;
 
     (async () => {
-      // 1. Current week's check-ins joined to user + (left) the matching weekly_checkin
-      // points row. The !left embed gives us a points array; we pick the matching
-      // weekly_checkin row client-side. `awarded_value === null` is the canonical
-      // "late · 0 pts" signal — same derivation Home + PastCheckInList already use.
-      const ciRes = await supabase
+      // Current week's check-ins joined to user. Points are fetched separately
+      // and merged on user_id (everything below is constrained to one
+      // week_start anyway). `users:user_id (...)` is a real FK embed so it
+      // still works; `points!left` could not be — neither table FKs the other.
+      // `awarded_value === null` is the canonical "late · 0 pts" signal.
+      const ciPromise = supabase
         .from('check_ins')
         .select(`
           id, user_id, week_start, weight_kg, note, submitted_at, scale_photo_path,
-          users:user_id (display_name, color, avatar_url),
-          points!left (value, week_start, category)
+          users:user_id (display_name, color, avatar_url)
         `)
         .eq('week_start', weekStart)
         .order('submitted_at', { ascending: false });
+
+      const ptsPromise = supabase
+        .from('points')
+        .select('user_id, value')
+        .eq('category', 'weekly_checkin')
+        .eq('week_start', weekStart);
+
+      const [ciRes, ptsRes] = await Promise.all([ciPromise, ptsPromise]);
 
       if (cancelled) return;
       if (ciRes.error || !ciRes.data) {
@@ -57,24 +65,22 @@ export default function Activity() {
         return;
       }
 
-      const rows = ciRes.data.map((r) => {
-        const matching = (r.points || []).find(
-          (p) => p.category === 'weekly_checkin' && p.week_start === r.week_start,
-        );
-        return {
-          id:           r.id,
-          user_id:      r.user_id,
-          week_start:   r.week_start,
-          weight_kg:    Number(r.weight_kg),
-          note:         r.note,
-          submitted_at: r.submitted_at,
-          scale_path:   r.scale_photo_path,
-          display_name: r.users?.display_name || '',
-          color:        r.users?.color || ACCENT,
-          avatar_url:   r.users?.avatar_url || null,
-          awarded_value: matching ? matching.value : null,
-        };
-      });
+      const valueByUser = {};
+      for (const p of ptsRes.data || []) valueByUser[p.user_id] = p.value;
+
+      const rows = ciRes.data.map((r) => ({
+        id:           r.id,
+        user_id:      r.user_id,
+        week_start:   r.week_start,
+        weight_kg:    Number(r.weight_kg),
+        note:         r.note,
+        submitted_at: r.submitted_at,
+        scale_path:   r.scale_photo_path,
+        display_name: r.users?.display_name || '',
+        color:        r.users?.color || ACCENT,
+        avatar_url:   r.users?.avatar_url || null,
+        awarded_value: valueByUser[r.user_id] ?? null,
+      }));
 
       // 2. Most-recent prior check-in per user for the delta pill. NOT
       // "last week" literally — a skipped week would null-out the delta on the
