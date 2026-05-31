@@ -264,7 +264,19 @@ export default function CheckIn() {
 
 // ── Step 1: scale photo capture ───────────────────────
 function StepScale({ preview, onPick, onNext, onCancel }) {
-  const inputRef = useRef(null);
+  // Two separate <input>s: the camera one carries `capture="environment"` so
+  // mobile opens the rear camera directly; the library one omits `capture`
+  // so the picker shows the photo roll. A single input with `capture` skips
+  // the library entirely on most mobile browsers.
+  const cameraInputRef = useRef(null);
+  const libraryInputRef = useRef(null);
+
+  function handleChange(e) {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (f) onPick(f);
+  }
+
   return (
     <div style={{ paddingTop: 6 }}>
       <div style={{ textAlign: 'center', marginBottom: 18 }}>
@@ -278,7 +290,7 @@ function StepScale({ preview, onPick, onNext, onCancel }) {
       </div>
 
       <div
-        onClick={() => inputRef.current && inputRef.current.click()}
+        onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
         role="button"
         tabIndex={0}
         style={{
@@ -321,22 +333,41 @@ function StepScale({ preview, onPick, onNext, onCancel }) {
             </div>
           </>
         )}
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            const f = e.target.files && e.target.files[0];
-            e.target.value = '';
-            if (f) onPick(f);
-          }}
-        />
       </div>
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleChange}
+      />
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleChange}
+      />
 
-      <div style={{ textAlign: 'center', fontSize: 12, color: theme.textMut, marginBottom: 18 }}>
-        or upload from library
+      <div style={{ textAlign: 'center', marginBottom: 18 }}>
+        <button
+          type="button"
+          onClick={() => libraryInputRef.current && libraryInputRef.current.click()}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: theme.textSec,
+            fontFamily: theme.hd,
+            fontWeight: 500,
+            fontSize: 12,
+            textDecoration: 'underline',
+            cursor: 'pointer',
+            padding: 4,
+          }}
+        >
+          or upload from library
+        </button>
       </div>
 
       <Button full disabled={!preview} onClick={onNext}>

@@ -12,6 +12,7 @@ import {
 } from '../lib/dates';
 
 import Avatar from '../components/ui/Avatar';
+import Lightbox from '../components/ui/Lightbox';
 
 const TABS = [
   { id: 'weekly_checkin',    label: 'Weekly Check-Ins', live: true  },
@@ -142,6 +143,7 @@ function WeeklyCheckInsTab() {
   const [inputs, setInputs]       = useState({});          // user_id -> string
   const [busyUser, setBusyUser]   = useState(null);
   const [savedToast, setSavedToast] = useState(null);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   const wkIdx  = ALL_WEEK_STARTS.indexOf(weekStart);
   const wkNum  = weekNumber(weekStart);
@@ -359,16 +361,18 @@ function WeeklyCheckInsTab() {
             onInputChange={(v) => setInputs((prev) => ({ ...prev, [r.user_id]: v }))}
             onSave={() => savePoints(r.user_id)}
             onClear={() => clearPoints(r.user_id)}
+            onPhotoClick={(url) => setLightboxSrc(url)}
             busy={busyUser === r.user_id}
             toast={savedToast?.user_id === r.user_id ? savedToast.kind : null}
           />
         ))
       )}
+      <Lightbox src={lightboxSrc} alt="Scale photo" onClose={() => setLightboxSrc(null)} />
     </div>
   );
 }
 
-function AdminRow({ row, photoUrl, weekStart, inputValue, onInputChange, onSave, onClear, busy, toast }) {
+function AdminRow({ row, photoUrl, weekStart, inputValue, onInputChange, onSave, onClear, onPhotoClick, busy, toast }) {
   const { display_name, avatar_url, color, check_in, points_row } = row;
   const status = computeStatus(check_in, points_row, weekStart);
 
@@ -397,7 +401,15 @@ function AdminRow({ row, photoUrl, weekStart, inputValue, onInputChange, onSave,
         {check_in ? (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
             {photoUrl ? (
-              <a href={photoUrl} target="_blank" rel="noreferrer" style={{ flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => onPhotoClick(photoUrl)}
+                aria-label="View scale photo"
+                style={{
+                  flexShrink: 0, background: 'transparent', border: 'none',
+                  padding: 0, cursor: 'zoom-in',
+                }}
+              >
                 <img
                   src={photoUrl}
                   alt="Scale"
@@ -406,7 +418,7 @@ function AdminRow({ row, photoUrl, weekStart, inputValue, onInputChange, onSave,
                     border: `1px solid ${theme.border}`, display: 'block',
                   }}
                 />
-              </a>
+              </button>
             ) : (
               <div style={{
                 width: 60, height: 46, borderRadius: 8,

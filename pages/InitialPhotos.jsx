@@ -279,27 +279,60 @@ function PoseGuide({ pose, existingUrl }) {
   );
 }
 
-// ── Hidden file input wrapped in a primary-button label ───
+// ── Hidden file inputs wrapped in a primary button + library link ───
+// Two inputs because a single one with `capture="environment"` skips the
+// photo library entirely on most mobile browsers.
 function CapturePicker({ children, disabled, onPick }) {
-  const inputRef = React.useRef(null);
+  const cameraInputRef = React.useRef(null);
+  const libraryInputRef = React.useRef(null);
+
+  function handleChange(e) {
+    const f = e.target.files && e.target.files[0];
+    // Reset value so the same file can be re-picked after an error.
+    e.target.value = '';
+    if (f) onPick(f);
+  }
+
   return (
     <>
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         style={{ display: 'none' }}
-        onChange={(e) => {
-          const f = e.target.files && e.target.files[0];
-          // Reset value so the same file can be re-picked after an error.
-          e.target.value = '';
-          if (f) onPick(f);
-        }}
+        onChange={handleChange}
       />
-      <Button full disabled={disabled} onClick={() => inputRef.current && inputRef.current.click()}>
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleChange}
+      />
+      <Button full disabled={disabled} onClick={() => cameraInputRef.current && cameraInputRef.current.click()}>
         {children}
       </Button>
+      <div style={{ textAlign: 'center', marginTop: 10 }}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => libraryInputRef.current && libraryInputRef.current.click()}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: theme.textSec,
+            fontFamily: theme.hd,
+            fontWeight: 500,
+            fontSize: 12,
+            textDecoration: 'underline',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            padding: 4,
+          }}
+        >
+          or upload from library
+        </button>
+      </div>
     </>
   );
 }

@@ -15,6 +15,7 @@ import BottomNav from '../components/ui/BottomNav';
 import Avatar from '../components/ui/Avatar';
 import WeightBadge from '../components/ui/WeightBadge';
 import ReactionPills from '../components/ui/ReactionPills';
+import Lightbox from '../components/ui/Lightbox';
 
 const WEEKDAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_SHORT   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -31,6 +32,7 @@ export default function Activity() {
   const [photoUrls, setPhotoUrls]         = useState({});   // { path: signedUrl }
   const [reactionMap, setReactionMap]     = useState({});   // { check_in_id: { emoji: count } }
   const [myReactionMap, setMyReactionMap] = useState({});   // { check_in_id: Set<emoji> }
+  const [lightboxSrc, setLightboxSrc]     = useState(null); // url currently zoomed
 
   useEffect(() => {
     if (!myUserId) return;
@@ -264,6 +266,7 @@ export default function Activity() {
                     if (it.user_id === myUserId) navigate('/profile');
                     else navigate(`/profile/${it.user_id}`);
                   }}
+                  onPhotoClick={(url) => setLightboxSrc(url)}
                   onToggleReaction={(emoji) => toggleReaction(it.id, emoji)}
                 />
               ))}
@@ -271,11 +274,12 @@ export default function Activity() {
           ))}
         </div>
       )}
+      <Lightbox src={lightboxSrc} alt="Scale photo" onClose={() => setLightboxSrc(null)} />
     </Page>
   );
 }
 
-function FeedItem({ item, isLastInGroup, isMe, photoUrl, reactions, myReactions, onAvatarClick, onToggleReaction }) {
+function FeedItem({ item, isLastInGroup, isMe, photoUrl, reactions, myReactions, onAvatarClick, onPhotoClick, onToggleReaction }) {
   // awarded_value: 5 = on-time, 1–4 = partial credit, 0 or null = no points (Sat/Sun or admin override).
   const partial = item.awarded_value != null && item.awarded_value > 0 && item.awarded_value < 5;
   const noCredit = item.awarded_value == null || item.awarded_value === 0;
@@ -336,7 +340,7 @@ function FeedItem({ item, isLastInGroup, isMe, photoUrl, reactions, myReactions,
           </span>
           {item.change != null && <WeightBadge change={item.change} />}
         </div>
-        <ScalePhotoThumb url={photoUrl} weight={item.weight_kg} />
+        <ScalePhotoThumb url={photoUrl} weight={item.weight_kg} onClick={() => photoUrl && onPhotoClick(photoUrl)} />
         <div style={{
           fontFamily: theme.bd, fontSize: 13, color: theme.textSec,
           lineHeight: 1.5, marginBottom: 8,
@@ -353,17 +357,27 @@ function FeedItem({ item, isLastInGroup, isMe, photoUrl, reactions, myReactions,
   );
 }
 
-function ScalePhotoThumb({ url, weight }) {
+function ScalePhotoThumb({ url, weight, onClick }) {
   if (url) {
     return (
-      <img
-        src={url}
-        alt="Scale"
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="View scale photo"
         style={{
-          width: 64, height: 48, borderRadius: 8, objectFit: 'cover',
-          border: `1px solid ${theme.border}`, display: 'block', marginBottom: 8,
+          background: 'transparent', border: 'none', padding: 0,
+          cursor: 'zoom-in', display: 'block', marginBottom: 8,
         }}
-      />
+      >
+        <img
+          src={url}
+          alt="Scale"
+          style={{
+            width: 64, height: 48, borderRadius: 8, objectFit: 'cover',
+            border: `1px solid ${theme.border}`, display: 'block',
+          }}
+        />
+      </button>
     );
   }
   // Fallback placeholder mirrors the design when the URL isn't ready yet

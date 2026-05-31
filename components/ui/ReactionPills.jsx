@@ -67,64 +67,70 @@ export default function ReactionPills({ reactions = {}, myReactions, onToggle })
         );
       })}
 
-      <button
-        type="button"
-        onClick={() => setPickerOpen((v) => !v)}
-        aria-label="Add reaction"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 26,
-          height: 26,
-          borderRadius: '50%',
-          background: theme.surfaceBright,
-          border: `1px solid ${theme.border}`,
-          fontSize: 14,
-          color: theme.textMut,
-          cursor: 'pointer',
-          lineHeight: 1,
-          padding: 0,
-        }}
-      >
-        +
-      </button>
-
-      {pickerOpen && (
-        <div
+      {/* The picker is positioned relative to this inner wrapper, not the
+          outer row, so it pops up directly above the + button instead of
+          floating to the row's right edge and overlapping the note. */}
+      <div style={{ position: 'relative', display: 'inline-flex' }}>
+        <button
+          type="button"
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-label="Add reaction"
           style={{
-            position: 'absolute',
-            bottom: 32,
-            right: 0,
             display: 'flex',
-            gap: 6,
-            padding: '6px 8px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 26,
+            height: 26,
+            borderRadius: '50%',
             background: theme.surfaceBright,
             border: `1px solid ${theme.border}`,
-            borderRadius: theme.radChip,
-            boxShadow: theme.shadow,
-            zIndex: 10,
+            fontSize: 14,
+            color: theme.textMut,
+            cursor: 'pointer',
+            lineHeight: 1,
+            padding: 0,
           }}
         >
-          {PICKER_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => handlePick(emoji)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                fontSize: 20,
-                cursor: 'pointer',
-                padding: '2px 4px',
-                lineHeight: 1,
-              }}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
+          +
+        </button>
+
+        {pickerOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 'calc(100% + 6px)',
+              left: 0,
+              display: 'flex',
+              gap: 6,
+              padding: '6px 8px',
+              background: theme.surfaceBright,
+              border: `1px solid ${theme.border}`,
+              borderRadius: theme.radChip,
+              boxShadow: theme.shadow,
+              zIndex: 10,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {PICKER_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handlePick(emoji)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  padding: '2px 4px',
+                  lineHeight: 1,
+                }}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
