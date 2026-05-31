@@ -145,7 +145,15 @@ export default function Home() {
               </Banner>
             )}
 
-            <MiniLeaderboard top3={top3} myRow={myRow} myRank={myRank} />
+            <MiniLeaderboard
+              top3={top3}
+              myRow={myRow}
+              myRank={myRank}
+              onSelect={(uid) => {
+                if (uid === userId) navigate('/profile');
+                else navigate(`/profile/${uid}`);
+              }}
+            />
 
             <Section
               title="Past Check-Ins"
@@ -356,7 +364,7 @@ function NextOpensFootnote() {
 }
 
 // ── Mini leaderboard ─────────────────────────────
-function MiniLeaderboard({ top3, myRow, myRank }) {
+function MiniLeaderboard({ top3, myRow, myRank, onSelect }) {
   return (
     <Section
       title="🏆 Leaderboard"
@@ -373,8 +381,25 @@ function MiniLeaderboard({ top3, myRow, myRank }) {
             : r.displayRank === 2 ? theme.medalSilver
             : r.displayRank === 3 ? theme.medalBronze
             : theme.textMut;
+          const interactive = !!onSelect;
           return (
-            <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 2px' }}>
+            <button
+              key={r.user_id}
+              type="button"
+              onClick={interactive ? () => onSelect(r.user_id) : undefined}
+              disabled={!interactive}
+              style={{
+                width: '100%',
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '6px 2px',
+                background: 'transparent',
+                border: 'none',
+                color: 'inherit',
+                cursor: interactive ? 'pointer' : 'default',
+                textAlign: 'left',
+                font: 'inherit',
+              }}
+            >
               <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 14, color: medalColor, width: 18, textAlign: 'center' }}>
                 {r.displayRank}
               </span>
@@ -385,7 +410,7 @@ function MiniLeaderboard({ top3, myRow, myRank }) {
               <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 14 }}>
                 {r.total_points}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
