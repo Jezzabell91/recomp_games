@@ -30,6 +30,7 @@ const PARTICIPANT_COLORS = [
   ['Jimmy', '#26C6DA'],
   ['Joe', '#FFA500'],
   ['Justin', '#EC407A'],
+  ['Vishal', '#2E7D32'],
 ];
 
 function Section({ title, children }) {
