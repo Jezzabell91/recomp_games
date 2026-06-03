@@ -5,19 +5,23 @@ name: Award daily push-up points
 # times a day is safe — later runs just no-op for anyone already awarded.
 #
 # The API only reports the CURRENT Brisbane day and resets at midnight, so we
-# must capture the day BEFORE midnight Brisbane. Brisbane is UTC+10 with no DST:
-#   3:00pm Brisbane = 05:00 UTC   •   11:30pm Brisbane = 13:30 UTC
-# Runs every 30 min from 3:00pm to 11:30pm Brisbane, plus a final 11:58pm sweep
-# right before the count resets (catches last-minute late-night push-ups).
+# must capture the day BEFORE midnight Brisbane. Brisbane is UTC+10 with no DST.
+# Runs every 30 min from ~12:07pm to ~11:37pm Brisbane, plus a final 11:58pm
+# sweep right before the count resets (catches last-minute late-night push-ups).
 #
-# Note: GitHub-hosted cron can be delayed or occasionally skipped under load.
-# That's fine here — award-on-cross means a missed run is caught by the next one.
+# Minutes are :07/:37, not :00/:30, on purpose: GitHub's scheduler is most
+# congested (and most delayed/skipped) at the top and bottom of the hour, so
+# off-peak minutes fire noticeably closer to on-time.
+#
+# Note: GitHub-hosted cron can still be delayed or occasionally skipped under
+# load. That's fine here — award-on-cross means a missed run is caught by the
+# next one.
 # Out of June (no row in pushup_targets.csv), each run harmlessly does nothing;
 # disable this workflow once the push-up challenge ends if you want to stop it.
 
 on:
   schedule:
-    - cron: "0,30 5-13 * * *" # 15:00–23:30 Brisbane, every 30 min
+    - cron: "7,37 2-13 * * *" # 12:07–23:37 Brisbane, every 30 min (off-peak minutes)
     - cron: "58 13 * * *"     # 23:58 Brisbane — last grab before midnight reset
   workflow_dispatch: {}
 
