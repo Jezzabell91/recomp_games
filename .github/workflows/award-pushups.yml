@@ -35,7 +35,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22, not 20: @supabase/supabase-js spins up a Realtime client on
+          # createClient() and needs a global WebSocket, which Node 20 lacks.
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: node scripts/award_pushups.mjs
