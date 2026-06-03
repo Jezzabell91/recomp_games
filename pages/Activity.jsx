@@ -29,6 +29,7 @@ export default function Activity() {
   const wkNum = weekNumber(weekStart);
 
   const [items, setItems]                 = useState(null); // null = loading
+  const [events, setEvents]               = useState(null); // feed_events (push-up recaps)
   const [photoUrls, setPhotoUrls]         = useState({});   // { path: signedUrl }
   const [reactionMap, setReactionMap]     = useState({});   // { check_in_id: { emoji: count } }
   const [myReactionMap, setMyReactionMap] = useState({});   // { check_in_id: Set<emoji> }
@@ -59,9 +60,17 @@ export default function Activity() {
         .eq('category', 'weekly_checkin')
         .eq('week_start', weekStart);
 
-      const [ciRes, ptsRes] = await Promise.all([ciPromise, ptsPromise]);
+      // Push-up recaps for this week (one per day, written by the daily script).
+      const feedPromise = supabase
+        .from('feed_events')
+        .select('id, kind, event_date, payload')
+        .gte('event_date', weekStart)
+        .order('event_date', { ascending: false });
+
+      const [ciRes, ptsRes, feedRes] = await Promise.all([ciPromise, ptsPromise, feedPromise]);
 
       if (cancelled) return;
+      setEvents(feedRes.error || !feedRes.data ? [] : feedRes.data);
       if (ciRes.error || !ciRes.data) {
         setItems([]);
         return;
@@ -195,23 +204,47 @@ export default function Activity() {
     }
   }
 
+  // Merge check-ins and push-up recaps into one day-bucketed, time-sorted feed.
+  // null while either source is still loading.
   const groups = useMemo(() => {
-    if (!items) return [];
+    if (items === null || events === null) return null;
     const todayYMD = todayInBrisbaneYMD();
     const yesterdayYMD = todayInBrisbaneYMD(new Date(Date.now() - 86400000));
-    const today = [], yesterday = [], earlier = [];
+
+    const entries = [];
     for (const it of items) {
-      const ymd = todayInBrisbaneYMD(new Date(it.submitted_at));
-      if (ymd === todayYMD) today.push(it);
-      else if (ymd === yesterdayYMD) yesterday.push(it);
-      else earlier.push(it);
+      entries.push({
+        kind: 'checkin',
+        ymd: todayInBrisbaneYMD(new Date(it.submitted_at)),
+        ts: new Date(it.submitted_at).getTime(),
+        data: it,
+      });
     }
+    for (const ev of events) {
+      // Sort the recap to the end of its Brisbane day (+10, no DST) so it heads
+      // that day's section, above the check-ins submitted earlier that day.
+      entries.push({
+        kind: 'pushup',
+        ymd: ev.event_date,
+        ts: Date.parse(`${ev.event_date}T23:59:59+10:00`),
+        data: ev,
+      });
+    }
+
+    const today = [], yesterday = [], earlier = [];
+    for (const e of entries) {
+      if (e.ymd === todayYMD) today.push(e);
+      else if (e.ymd === yesterdayYMD) yesterday.push(e);
+      else earlier.push(e);
+    }
+    const byTsDesc = (a, b) => b.ts - a.ts;
+    today.sort(byTsDesc); yesterday.sort(byTsDesc); earlier.sort(byTsDesc);
     return [
       { label: 'Today', items: today },
       { label: 'Yesterday', items: yesterday },
       { label: 'Earlier', items: earlier },
     ].filter((g) => g.items.length > 0);
-  }, [items]);
+  }, [items, events]);
 
   return (
     <Page
@@ -233,9 +266,9 @@ export default function Activity() {
         </div>
       </div>
 
-      {items === null ? (
+      {groups === null ? (
         <div style={{ color: theme.textSec, padding: '20px 0', textAlign: 'center' }}>Loading…</div>
-      ) : items.length === 0 ? (
+      ) : groups.length === 0 ? (
         <div style={{
           color: theme.textMut, padding: '40px 0', textAlign: 'center',
           fontFamily: theme.bd, fontSize: 14,
@@ -253,23 +286,36 @@ export default function Activity() {
               }}>
                 {g.label}
               </div>
-              {g.items.map((it, i) => (
-                <FeedItem
-                  key={it.id}
-                  item={it}
-                  isLastInGroup={i === g.items.length - 1}
-                  isMe={it.user_id === myUserId}
-                  photoUrl={photoUrls[it.scale_path]}
-                  reactions={reactionMap[it.id] || {}}
-                  myReactions={myReactionMap[it.id] || new Set()}
-                  onAvatarClick={() => {
-                    if (it.user_id === myUserId) navigate('/profile');
-                    else navigate(`/profile/${it.user_id}`);
-                  }}
-                  onPhotoClick={(url) => setLightboxSrc(url)}
-                  onToggleReaction={(emoji) => toggleReaction(it.id, emoji)}
-                />
-              ))}
+              {g.items.map((entry, i) => {
+                const isLastInGroup = i === g.items.length - 1;
+                if (entry.kind === 'pushup') {
+                  return (
+                    <PushUpSummaryItem
+                      key={`ev-${entry.data.id}`}
+                      event={entry.data}
+                      isLastInGroup={isLastInGroup}
+                    />
+                  );
+                }
+                const it = entry.data;
+                return (
+                  <FeedItem
+                    key={it.id}
+                    item={it}
+                    isLastInGroup={isLastInGroup}
+                    isMe={it.user_id === myUserId}
+                    photoUrl={photoUrls[it.scale_path]}
+                    reactions={reactionMap[it.id] || {}}
+                    myReactions={myReactionMap[it.id] || new Set()}
+                    onAvatarClick={() => {
+                      if (it.user_id === myUserId) navigate('/profile');
+                      else navigate(`/profile/${it.user_id}`);
+                    }}
+                    onPhotoClick={(url) => setLightboxSrc(url)}
+                    onToggleReaction={(emoji) => toggleReaction(it.id, emoji)}
+                  />
+                );
+              })}
             </div>
           ))}
         </div>
@@ -352,6 +398,82 @@ function FeedItem({ item, isLastInGroup, isMe, photoUrl, reactions, myReactions,
           myReactions={myReactions}
           onToggle={onToggleReaction}
         />
+      </div>
+    </div>
+  );
+}
+
+function PushUpSummaryItem({ event, isLastInGroup }) {
+  const { target, rest_day: restDay, points_each: pts = 1, completed = [] } =
+    event.payload || {};
+  const n = completed.length;
+
+  const headline = restDay
+    ? 'Rest day 🛌 — everyone banks a free point'
+    : n === 0
+      ? `Today's target: ${target} push-ups`
+      : `${n} ${n === 1 ? 'person' : 'people'} hit the ${target} push-up target`;
+
+  return (
+    <div style={{ display: 'flex', gap: 12, position: 'relative' }}>
+      {!isLastInGroup && (
+        <div style={{
+          position: 'absolute', left: 16, top: 40, width: 2, bottom: -4,
+          background: theme.sep, borderRadius: 1,
+        }} />
+      )}
+      <div style={{
+        flexShrink: 0, position: 'relative', zIndex: 1,
+        width: 34, height: 34, borderRadius: '50%',
+        background: theme.surfaceBright, border: `1px solid ${theme.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17,
+      }}>
+        💪
+      </div>
+      <div style={{ flex: 1, minWidth: 0, paddingBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: theme.hd, fontWeight: 600, fontSize: 14 }}>
+            Daily push-ups
+          </span>
+          <span style={{
+            fontFamily: theme.hd, fontWeight: 500, fontSize: 10,
+            color: ACCENT, textTransform: 'uppercase', letterSpacing: 1,
+            padding: '1px 6px', borderRadius: 6,
+            border: `1px solid ${theme.border}`, background: theme.surfaceBright,
+          }}>
+            +{pts} pt each
+          </span>
+        </div>
+        <div style={{
+          fontFamily: theme.bd, fontSize: 13, color: theme.textSec,
+          lineHeight: 1.5, marginBottom: completed.length ? 10 : 0,
+        }}>
+          {headline}
+        </div>
+        {completed.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {completed.map((c) => (
+              <div
+                key={c.user_id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '3px 9px 3px 3px', borderRadius: 999,
+                  border: `1px solid ${theme.border}`, background: theme.surfaceBright,
+                }}
+              >
+                <Avatar name={c.name} src={c.avatar_url} color={c.color || ACCENT} size={22} />
+                <span style={{ fontFamily: theme.hd, fontWeight: 600, fontSize: 12 }}>
+                  {c.name}
+                </span>
+                {c.count != null && !restDay && (
+                  <span style={{ fontFamily: theme.hd, fontWeight: 500, fontSize: 11, color: theme.textMut }}>
+                    {c.count}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
