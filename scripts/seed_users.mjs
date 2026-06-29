@@ -65,7 +65,6 @@ const COLOR_BY_NAME = {
   Jimmy:   "#26C6DA", // cyan
   Joe:     "#FFA500", // orange
   Justin:  "#EC407A", // pink (new 9th color)
-  Vishal:  "#2E7D32", // dark green
 };
 
 // ── CSV parse ─────────────────────────────────────────────
