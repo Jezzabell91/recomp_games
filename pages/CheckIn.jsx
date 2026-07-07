@@ -37,6 +37,10 @@ export default function CheckIn() {
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // Synchronous re-entrancy latch. `submitting` is React state, so it doesn't
+  // flip until the next render — a fast double-tap can re-enter submit() before
+  // the button disables. This closes that window immediately. See submit().
+  const submitLockRef = useRef(false);
   const [result, setResult] = useState(null); // { row, awardedValue, scaleUrl, partial }
 
   // Note: weekStartAtMount is for *display only* (banner copy, week labels).
@@ -122,70 +126,92 @@ export default function CheckIn() {
     if (!Number.isFinite(weightNum) || weightNum <= 0) return;
     if (note.trim().length === 0) return;
 
+    // Re-entrancy latch (see submitLockRef). A second concurrent submit would
+    // re-upload to the same deterministic path and then hit the unique
+    // constraint on insert — the cleanup path below must never run against a
+    // path a committed row already owns.
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+
     setError(null);
     setSubmitting(true);
 
-    // CRITICAL: re-read currentWeekStart() *inside* the handler. A user lingering
-    // on the form across Sun 23:59 → Mon 00:01 Brisbane would otherwise insert
-    // against the previous Monday, the trigger would no-op, AND they'd be locked
-    // out of this Monday's check-in. weekStartAtMount is for display only.
-    const weekStart = currentWeekStart();
-    const path = `${userId}/checkin/${weekStart}/scale.jpg`;
+    try {
+      // CRITICAL: re-read currentWeekStart() *inside* the handler. A user lingering
+      // on the form across Sun 23:59 → Mon 00:01 Brisbane would otherwise insert
+      // against the previous Monday, the trigger would no-op, AND they'd be locked
+      // out of this Monday's check-in. weekStartAtMount is for display only.
+      const weekStart = currentWeekStart();
+      const path = `${userId}/checkin/${weekStart}/scale.jpg`;
 
-    const { error: upErr } = await resizeAndUpload(scaleFile, path);
-    if (upErr) {
-      setError(`Upload failed: ${upErr.message || 'unknown error'}`);
+      const { error: upErr } = await resizeAndUpload(scaleFile, path);
+      if (upErr) {
+        setError(`Upload failed: ${upErr.message || 'unknown error'}`);
+        return;
+      }
+
+      const { data: inserted, error: insErr } = await supabase
+        .from('check_ins')
+        .insert({
+          user_id: userId,
+          week_start: weekStart,
+          scale_photo_path: path,
+          weight_kg: weightNum,
+          note: note.trim(),
+        })
+        .select('id, week_start, weight_kg, note, scale_photo_path, submitted_at')
+        .single();
+
+      if (insErr || !inserted) {
+        // A unique-constraint violation (Postgres 23505) means a check-in for
+        // this (user, week) already exists — and it references this exact
+        // deterministic path, whose photo our upsert just overwrote. Deleting
+        // the object here would destroy that existing check-in's scale photo,
+        // so skip cleanup. For any other failure the upload is a true orphan
+        // (no row points at it) and removing it is correct.
+        if (insErr?.code === '23505') {
+          setError("You've already checked in this week.");
+        } else {
+          await removeIgnore(path);
+          setError(`Save failed: ${insErr ? insErr.message : 'no row returned'}`);
+        }
+        return;
+      }
+
+      // Re-read the row joined to its weekly_checkin points row. The trigger is
+      // the source of truth for how many points were awarded — never infer from
+      // the client clock, because the per-day 30-min grace lives in the trigger
+      // and the UI must reflect what the trigger actually did. Key off the
+      // server-stamped inserted.week_start (migration 0019 derives it from the
+      // commit instant), which can differ from our pre-submit `weekStart` right
+      // at the Sun→Mon rollover — the points row lives under the server's value.
+      const { data: pointsRow, error: pErr } = await supabase
+        .from('points')
+        .select('value')
+        .eq('user_id', userId)
+        .eq('week_start', inserted.week_start)
+        .eq('category', 'weekly_checkin')
+        .maybeSingle();
+
+      const { url: scaleUrl } = await signedUrl(path);
+
+      // Re-read failure is non-fatal: the check-in IS recorded. Show the
+      // confirmation with partial=true so the user knows points status is unknown.
+      if (pErr) {
+        console.warn('points re-read failed:', pErr.message);
+        setResult({ row: inserted, awardedValue: null, scaleUrl, partial: true });
+      } else {
+        setResult({
+          row: inserted,
+          awardedValue: pointsRow ? pointsRow.value : null,
+          scaleUrl,
+          partial: false,
+        });
+      }
+    } finally {
       setSubmitting(false);
-      return;
+      submitLockRef.current = false;
     }
-
-    const { data: inserted, error: insErr } = await supabase
-      .from('check_ins')
-      .insert({
-        user_id: userId,
-        week_start: weekStart,
-        scale_photo_path: path,
-        weight_kg: weightNum,
-        note: note.trim(),
-      })
-      .select('id, week_start, weight_kg, note, scale_photo_path, submitted_at')
-      .single();
-
-    if (insErr || !inserted) {
-      await removeIgnore(path);
-      setError(`Save failed: ${insErr ? insErr.message : 'no row returned'}`);
-      setSubmitting(false);
-      return;
-    }
-
-    // Re-read the row joined to its weekly_checkin points row. The trigger is
-    // the source of truth for how many points were awarded — never infer from
-    // the client clock, because the per-day 30-min grace lives in the trigger
-    // and the UI must reflect what the trigger actually did.
-    const { data: pointsRow, error: pErr } = await supabase
-      .from('points')
-      .select('value')
-      .eq('user_id', userId)
-      .eq('week_start', weekStart)
-      .eq('category', 'weekly_checkin')
-      .maybeSingle();
-
-    const { url: scaleUrl } = await signedUrl(path);
-
-    // Re-read failure is non-fatal: the check-in IS recorded. Show the
-    // confirmation with partial=true so the user knows points status is unknown.
-    if (pErr) {
-      console.warn('points re-read failed:', pErr.message);
-      setResult({ row: inserted, awardedValue: null, scaleUrl, partial: true });
-    } else {
-      setResult({
-        row: inserted,
-        awardedValue: pointsRow ? pointsRow.value : null,
-        scaleUrl,
-        partial: false,
-      });
-    }
-    setSubmitting(false);
   }
 
   // ── Render branches ──────────────────────────────────

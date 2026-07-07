@@ -16,6 +16,7 @@ import Lightbox from '../components/ui/Lightbox';
 
 const TABS = [
   { id: 'weekly_checkin',    label: 'Weekly Check-Ins', live: true  },
+  { id: 'manual_adjustment', label: 'Adjustments',      live: true  },
   { id: 'monthly_challenge', label: 'Monthly',          live: false },
   { id: 'body_comp',         label: 'Body Comp',        live: false },
   { id: 'push_up',           label: 'Push-Ups',         live: false },
@@ -115,6 +116,8 @@ export default function Admin() {
       <div style={{ padding: '16px' }}>
         {tab === 'weekly_checkin' ? (
           <WeeklyCheckInsTab />
+        ) : tab === 'manual_adjustment' ? (
+          <AdjustmentsTab />
         ) : (
           <div style={{ color: theme.textSec, padding: '40px 0', textAlign: 'center' }}>
             Coming in a later phase — see PLAN.md.
@@ -370,6 +373,333 @@ function WeeklyCheckInsTab() {
       <Lightbox src={lightboxSrc} alt="Scale photo" onClose={() => setLightboxSrc(null)} />
     </div>
   );
+}
+
+// Free-form signed point adjustments (category 'manual_adjustment'). Rows are
+// hidden from non-admins by RLS (migration 0021) and no client view breaks
+// them out, so an adjustment only ever surfaces as a shifted leaderboard total.
+function AdjustmentsTab() {
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
+  const [rows, setRows]             = useState([]);   // per-user: profile + total + adjustments
+  const [inputs, setInputs]         = useState({});   // user_id -> { sign, amount, reason }
+  const [busyUser, setBusyUser]     = useState(null);
+  const [savedToast, setSavedToast] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [usersRes, adjRes, lbRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, display_name, avatar_url, color')
+          .order('display_name', { ascending: true }),
+        supabase
+          .from('points')
+          .select('id, user_id, value, reason, awarded_at')
+          .eq('category', 'manual_adjustment')
+          .order('awarded_at', { ascending: false }),
+        supabase
+          .from('leaderboard')
+          .select('user_id, total_points'),
+      ]);
+
+      if (usersRes.error) throw usersRes.error;
+      if (adjRes.error)   throw adjRes.error;
+      if (lbRes.error)    throw lbRes.error;
+
+      const adjByUser = {};
+      for (const a of adjRes.data || []) {
+        (adjByUser[a.user_id] ||= []).push(a);
+      }
+      const totalByUser = Object.fromEntries(
+        (lbRes.data || []).map((r) => [r.user_id, r.total_points]),
+      );
+
+      setRows((usersRes.data || []).map((u) => ({
+        user_id:      u.id,
+        display_name: u.display_name,
+        avatar_url:   u.avatar_url,
+        color:        u.color || ACCENT,
+        total_points: totalByUser[u.id] ?? 0,
+        adjustments:  adjByUser[u.id] || [],
+      })));
+    } catch (e) {
+      setError(e.message || 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function inputFor(userId) {
+    return inputs[userId] || { sign: 1, amount: '', reason: '' };
+  }
+
+  function patchInput(userId, patch) {
+    setInputs((prev) => ({
+      ...prev,
+      [userId]: { ...(prev[userId] || { sign: 1, amount: '', reason: '' }), ...patch },
+    }));
+  }
+
+  async function applyAdjustment(userId) {
+    const { sign, amount, reason } = inputFor(userId);
+    const magnitude = Number(amount);
+    if (amount === '' || !Number.isInteger(magnitude) || magnitude <= 0) {
+      setError('Enter a whole number of points greater than 0');
+      return;
+    }
+    setBusyUser(userId);
+    setError(null);
+    try {
+      const { error: rpcErr } = await supabase.rpc('admin_add_adjustment', {
+        p_user_id: userId,
+        p_value:   sign * magnitude,
+        p_reason:  reason.trim() || null,
+      });
+      if (rpcErr) throw rpcErr;
+      setInputs((prev) => ({ ...prev, [userId]: { sign: 1, amount: '', reason: '' } }));
+      setSavedToast({ user_id: userId, kind: 'applied', at: Date.now() });
+      await load();
+    } catch (e) {
+      setError(e.message || 'Adjustment failed');
+    } finally {
+      setBusyUser(null);
+    }
+  }
+
+  async function removeAdjustment(userId, adjustmentId) {
+    if (!confirm('Remove this adjustment? The points come back off the total.')) return;
+    setBusyUser(userId);
+    setError(null);
+    try {
+      const { error: rpcErr } = await supabase.rpc('admin_delete_adjustment', {
+        p_id: adjustmentId,
+      });
+      if (rpcErr) throw rpcErr;
+      setSavedToast({ user_id: userId, kind: 'removed', at: Date.now() });
+      await load();
+    } catch (e) {
+      setError(e.message || 'Remove failed');
+    } finally {
+      setBusyUser(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!savedToast) return;
+    const t = setTimeout(() => setSavedToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [savedToast]);
+
+  return (
+    <div>
+      <div style={{
+        fontFamily: theme.bd, fontSize: 12, color: theme.textMut,
+        marginBottom: 12, lineHeight: 1.5,
+      }}>
+        Signed point adjustments. Only admins can see these rows — participants
+        just see their leaderboard total move.
+      </div>
+
+      {error && (
+        <div style={{
+          background: '#ff6b6b22',
+          border: `1px solid #ff6b6b44`,
+          color: '#ff9b9b',
+          borderRadius: theme.radCard,
+          padding: '10px 12px', marginBottom: 12,
+          fontFamily: theme.bd, fontSize: 13,
+        }}>{error}</div>
+      )}
+
+      {loading ? (
+        <div style={{ color: theme.textSec, padding: '20px 0', textAlign: 'center' }}>
+          Loading…
+        </div>
+      ) : (
+        rows.map((r) => (
+          <AdjustmentRow
+            key={r.user_id}
+            row={r}
+            input={inputFor(r.user_id)}
+            onPatchInput={(patch) => patchInput(r.user_id, patch)}
+            onApply={() => applyAdjustment(r.user_id)}
+            onRemove={(id) => removeAdjustment(r.user_id, id)}
+            busy={busyUser === r.user_id}
+            toast={savedToast?.user_id === r.user_id ? savedToast.kind : null}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function AdjustmentRow({ row, input, onPatchInput, onApply, onRemove, busy, toast }) {
+  const { display_name, avatar_url, color, total_points, adjustments } = row;
+  const { sign, amount, reason } = input;
+  const net = adjustments.reduce((sum, a) => sum + a.value, 0);
+  const magnitude = Number(amount);
+  const valid = amount !== '' && Number.isInteger(magnitude) && magnitude > 0;
+  const negColor = '#ff6b6b';
+
+  return (
+    <div style={{
+      display: 'flex', gap: 12, padding: '12px 0',
+      borderBottom: `1px solid ${theme.sep}`,
+    }}>
+      <Avatar name={display_name} src={avatar_url} color={color} size={38} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
+          marginBottom: 8,
+        }}>
+          <span style={{ fontFamily: theme.hd, fontWeight: 600, fontSize: 15 }}>
+            {display_name}
+          </span>
+          <span style={{ fontFamily: theme.hd, fontWeight: 700, fontSize: 13, color: theme.textSec }}>
+            {total_points} pts
+          </span>
+          {net !== 0 && (
+            <span style={{
+              fontFamily: theme.hd, fontWeight: 600, fontSize: 11,
+              color: net > 0 ? theme.positive : negColor,
+            }}>
+              {net > 0 ? `+${net}` : net} adj
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => onPatchInput({ sign: -sign })}
+            disabled={busy}
+            aria-label={sign > 0 ? 'Adding points — tap to switch to removing' : 'Removing points — tap to switch to adding'}
+            style={{
+              width: 38, height: 36, flexShrink: 0,
+              background: sign > 0 ? theme.positive + '22' : negColor + '22',
+              color: sign > 0 ? theme.positive : negColor,
+              border: `1px solid ${sign > 0 ? theme.positive + '55' : negColor + '55'}`,
+              borderRadius: theme.radInput,
+              fontFamily: theme.hd, fontWeight: 700, fontSize: 16,
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}
+          >{sign > 0 ? '+' : '−'}</button>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={amount}
+            onChange={(e) => onPatchInput({ amount: e.target.value })}
+            disabled={busy}
+            placeholder="pts"
+            style={{
+              width: 60,
+              background: theme.surface,
+              color: theme.text,
+              border: `1px solid ${valid ? theme.accentBorder : theme.border}`,
+              borderRadius: theme.radInput,
+              padding: '8px 10px',
+              fontFamily: theme.hd, fontWeight: 600, fontSize: 14,
+              outline: 'none',
+            }}
+            aria-label={`Adjustment points for ${display_name}`}
+          />
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => onPatchInput({ reason: e.target.value })}
+            disabled={busy}
+            placeholder="Reason (admins only)"
+            style={{
+              flex: 1, minWidth: 120,
+              background: theme.surface,
+              color: theme.text,
+              border: `1px solid ${theme.border}`,
+              borderRadius: theme.radInput,
+              padding: '8px 10px',
+              fontFamily: theme.bd, fontSize: 13,
+              outline: 'none',
+            }}
+            aria-label={`Adjustment reason for ${display_name}`}
+          />
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={busy || !valid}
+            style={saveBtn(busy || !valid)}
+          >
+            {busy ? '…' : (valid ? `Apply ${sign > 0 ? '+' : '−'}${magnitude}` : 'Apply')}
+          </button>
+          {toast && (
+            <span style={{
+              fontFamily: theme.hd, fontWeight: 500, fontSize: 11,
+              color: theme.positive,
+            }}>
+              {toast === 'applied' ? 'Applied' : 'Removed'}
+            </span>
+          )}
+        </div>
+
+        {adjustments.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            {adjustments.map((a) => (
+              <div
+                key={a.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '4px 0',
+                }}
+              >
+                <span style={{
+                  fontFamily: theme.hd, fontWeight: 700, fontSize: 13,
+                  color: a.value > 0 ? theme.positive : negColor,
+                  width: 36, flexShrink: 0, textAlign: 'right',
+                }}>
+                  {a.value > 0 ? `+${a.value}` : a.value}
+                </span>
+                <span style={{
+                  flex: 1, minWidth: 0,
+                  fontFamily: theme.bd, fontSize: 12, color: theme.textSec,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {a.reason}
+                </span>
+                <span style={{
+                  fontFamily: theme.hd, fontSize: 11, color: theme.textMut,
+                  flexShrink: 0,
+                }}>
+                  {adjustmentStamp(a.awarded_at)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemove(a.id)}
+                  disabled={busy}
+                  style={{ ...clearBtn(busy), width: 24, height: 24, fontSize: 12 }}
+                  aria-label={`Remove ${a.value > 0 ? `+${a.value}` : a.value} adjustment for ${display_name}`}
+                  title="Remove this adjustment"
+                >✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function adjustmentStamp(iso) {
+  return new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Brisbane',
+    day: 'numeric', month: 'short',
+  }).format(new Date(iso));
 }
 
 function AdminRow({ row, photoUrl, weekStart, inputValue, onInputChange, onSave, onClear, onPhotoClick, busy, toast }) {
